@@ -2,12 +2,12 @@
 name = "spikenaut-fpga"
 version = "0.1.0"
 edition = "2021"
-authors = ["Raul Mc <raulmc@example.com>"]
 license = "GPL-3.0-or-later"
 description = "SNN-to-FPGA deployment pipeline: Q8.8 fixed-point parameter export, .mem file generation, UART spike readback, and Vivado timing report parsing for neuromorphic hardware"
 repository = "https://github.com/rmems/spikenaut-fpga"
 keywords = ["snn", "fpga", "neuromorphic", "spikenaut", "q8-8"]
 categories = ["science", "hardware-support", "algorithms"]
+exclude = ["docs/"]
 
 [lib]
 name = "spikenaut_fpga"
