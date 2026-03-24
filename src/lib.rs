@@ -8,6 +8,12 @@
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
 //! - **Vivado timing report parsing** for WNS/LUT utilization CI/CD gating
 //!
+//! ## Provenance
+//!
+//! Extracted from Eagle-Lander, the author's own private neuromorphic GPU supervisor
+//! repository (closed-source). The FPGA export pipeline deployed trained SNN parameters
+//! to Basys3 hardware in production before being open-sourced as a standalone crate.
+//!
 //! ## Quick Start
 //!
 //! ```rust
