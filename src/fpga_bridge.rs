@@ -38,7 +38,7 @@ impl FpgaBridge {
         Err("FPGA not found on any USB port".into())
     }
     
-    /// Send market stimuli to FPGA and read back spike states.
+    /// Send neural stimuli to FPGA and read back spike states.
     ///
     /// Protocol (16-neuron SiliconBridge v3.0):
     ///   TX: 0xAA + 32 bytes (16 × Q8.8 stimuli)
@@ -55,7 +55,7 @@ impl FpgaBridge {
         let mut tx_data = vec![0xAAu8]; // Sync byte
         for i in 0..16 {
             let s = stimuli.get(i).copied().unwrap_or(0.0);
-            let q8_8 = (s.clamp(-255.0, 255.0) * 256.0) as i16;
+            let q8_8 = (s.clamp(-127.99, 127.99) * 256.0) as i16;
             tx_data.extend_from_slice(&q8_8.to_be_bytes());
         }
 
