@@ -43,14 +43,18 @@ impl FpgaBridge {
     /// Protocol (16-neuron SiliconBridge v3.0):
     ///   TX: 0xAA + 32 bytes (16 × Q8.8 stimuli)
     ///   RX: 32 bytes (16 × Q8.8 potentials) + 2 bytes (spike flags) + 2 bytes (switches)
-    pub fn process_stimuli(&mut self, stimuli: &[f32; 16]) -> Result<(Vec<f32>, Vec<bool>), Box<dyn std::error::Error>> {
+    ///
+    /// Input is accepted as a dynamic slice; if fewer than 16 values are provided,
+    /// remaining channels are zero-padded. If more are provided, only the first 16 are sent.
+    pub fn process_stimuli(&mut self, stimuli: &[f32]) -> Result<(Vec<f32>, Vec<bool>), Box<dyn std::error::Error>> {
         if !self.active {
             return Err("FPGA bridge not active".into());
         }
 
         // Convert stimuli to Q8.8 format (16-bit fixed point)
         let mut tx_data = vec![0xAAu8]; // Sync byte
-        for &s in stimuli {
+        for i in 0..16 {
+            let s = stimuli.get(i).copied().unwrap_or(0.0);
             let q8_8 = (s.clamp(-255.0, 255.0) * 256.0) as i16;
             tx_data.extend_from_slice(&q8_8.to_be_bytes());
         }

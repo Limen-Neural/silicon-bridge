@@ -1,16 +1,16 @@
 [package]
-name = "spikenaut-fpga"
+name = "silicon-bridge"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "GPL-3.0-or-later"
 description = "SNN-to-FPGA deployment pipeline: Q8.8 fixed-point parameter export, .mem file generation, UART spike readback, and Vivado timing report parsing for neuromorphic hardware"
-repository = "https://github.com/rmems/spikenaut-fpga"
-keywords = ["snn", "fpga", "neuromorphic", "spikenaut", "q8-8"]
+repository = "https://github.com/Limen-Neural/silicon-bridge"
+keywords = ["snn", "fpga", "neuromorphic", "silicon", "q8-8"]
 categories = ["science", "hardware-support", "algorithms"]
 exclude = ["docs/"]
 
 [lib]
-name = "spikenaut_fpga"
+name = "silicon_bridge"
 path = "src/lib.rs"
 
 [dependencies]

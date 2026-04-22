@@ -1,6 +1,6 @@
-//! # spikenaut-fpga
+//! # silicon-bridge
 //!
-//! SNN-to-FPGA deployment pipeline for the Spikenaut neuromorphic ecosystem.
+//! SNN-to-FPGA deployment pipeline for FPGA-backed neuromorphic hardware.
 //!
 //! This crate provides:
 //! - **Q8.8 fixed-point parameter export** from trained SNN weights to `.mem` hex files
@@ -17,7 +17,7 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use spikenaut_fpga::{FpgaParameterExporter, q88_to_f32};
+//! use silicon_bridge::{FpgaParameterExporter, q88_to_f32};
 //!
 //! let mut exporter = FpgaParameterExporter::new();
 //! exporter.set_thresholds(vec![1.0; 16]);
@@ -32,7 +32,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! spikenaut-fpga = { version = "0.1", features = ["uart"] }
+//! silicon-bridge = { version = "0.1", features = ["uart"] }
 //! ```
 
 mod fpga_export;

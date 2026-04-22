@@ -2,12 +2,12 @@
   <img src="docs/logo.png" width="220" alt="Spikenaut">
 </p>
 
-<h1 align="center">spikenaut-fpga</h1>
+<h1 align="center">silicon-bridge</h1>
 <p align="center">SNN-to-FPGA deployment pipeline: Q8.8 parameter export, .mem generation, and UART spike readback</p>
 
 <p align="center">
-  <a href="https://crates.io/crates/spikenaut-fpga"><img src="https://img.shields.io/crates/v/spikenaut-fpga" alt="crates.io"></a>
-  <a href="https://docs.rs/spikenaut-fpga"><img src="https://docs.rs/spikenaut-fpga/badge.svg" alt="docs.rs"></a>
+  <a href="https://crates.io/crates/silicon-bridge"><img src="https://img.shields.io/crates/v/silicon-bridge" alt="crates.io"></a>
+  <a href="https://docs.rs/silicon-bridge"><img src="https://docs.rs/silicon-bridge/badge.svg" alt="docs.rs"></a>
   <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="GPL-3.0">
 </p>
 
@@ -30,7 +30,7 @@ back spike states at runtime.
 ## Installation
 
 ```toml
-spikenaut-fpga = "0.1"
+silicon-bridge = "0.1"
 ```
 
 ## Quick Start
@@ -38,7 +38,7 @@ spikenaut-fpga = "0.1"
 ### Export Parameters
 
 ```rust
-use spikenaut_fpga::{FpgaParameterExporter, FpgaParameters};
+use silicon_bridge::{FpgaParameterExporter, FpgaParameters};
 
 let params = FpgaParameters {
     weights:    vec![0.5, -0.3, 0.8, /* ... */],
@@ -54,11 +54,11 @@ exporter.export_mem("weights.mem", &params)?;
 ### UART Spike Readback
 
 ```rust
-use spikenaut_fpga::FpgaBridge;
+use silicon_bridge::FpgaBridge;
 
-let mut bridge = FpgaBridge::open("/dev/ttyUSB0", 115200)?;
-bridge.send_stimuli(&stimuli_q88)?;   // 16×Q8.8 → FPGA
-let spikes = bridge.read_spikes()?;   // 16-bit mask ← FPGA
+let mut bridge = FpgaBridge::new()?;
+let stimuli = vec![0.1; 16];
+let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 ```
 
 ## Q8.8 Fixed-Point Format
@@ -70,8 +70,7 @@ Range: [0, 255.996]  (unsigned)
        [-128, 127.996]  (signed, two's complement)
 ```
 
-Directly loadable by `WeightRam.sv` and `NeuronParamRam.sv` from
-[spikenaut-core-sv](https://github.com/rmems/spikenaut-core-sv).
+Directly loadable by `WeightRam.sv` and `NeuronParamRam.sv`.
 
 ## Extracted from Production
 
@@ -79,14 +78,12 @@ Extracted from [Eagle-Lander](https://github.com/rmems/Eagle-Lander), a private
 neuromorphic GPU supervisor. The FPGA export pipeline was decoupled from the private
 training orchestrator so it works with any SNN framework.
 
-## Part of the Spikenaut Ecosystem
+## Related Ecosystem
 
 | Library | Purpose |
 |---------|---------|
-| [spikenaut-core-sv](https://github.com/rmems/spikenaut-core-sv) | FPGA neuron IP cores |
-| [spikenaut-bridge-sv](https://github.com/rmems/spikenaut-bridge-sv) | FPGA UART protocol |
-| [SpikenautDistill.jl](https://github.com/rmems/SpikenautDistill.jl) | Julia training + distillation |
-| [spikenaut-backend](https://github.com/rmems/spikenaut-backend) | SNN backend abstraction |
+| [silicon-bridge-sv](https://github.com/Limen-Neural/silicon-bridge-sv) | FPGA bridge and protocol layer |
+| [silicon-distill-jl](https://github.com/Limen-Neural/silicon-distill-jl) | Julia training + distillation |
 
 ## License
 
