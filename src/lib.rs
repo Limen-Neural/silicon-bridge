@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! # silicon-bridge
 //!
 //! SNN-to-FPGA deployment pipeline for FPGA-backed neuromorphic hardware.
@@ -7,6 +8,8 @@
 //!   compatible with Vivado `$readmemh` synthesis
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
 //! - **Vivado timing report parsing** for WNS/LUT utilization CI/CD gating
+//!
+//! Licensed under either of [MIT](../LICENSE-MIT) or [Apache-2.0](../LICENSE-APACHE) at your option.
 //!
 //! ## Provenance
 //!

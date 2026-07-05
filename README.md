@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://crates.io/crates/silicon-bridge"><img src="https://img.shields.io/crates/v/silicon-bridge" alt="crates.io"></a>
   <a href="https://docs.rs/silicon-bridge"><img src="https://docs.rs/silicon-bridge/badge.svg" alt="docs.rs"></a>
-  <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="GPL-3.0">
+  <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="MIT/Apache-2.0">
 </p>
 
 ---
@@ -87,4 +87,4 @@ training orchestrator so it works with any SNN framework.
 
 ## License
 
-GPL-3.0-or-later
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.
