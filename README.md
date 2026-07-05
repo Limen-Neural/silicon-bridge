@@ -38,17 +38,16 @@ silicon-bridge = "0.1"
 ### Export Parameters
 
 ```rust
-use silicon_bridge::{FpgaParameterExporter, FpgaParameters};
+use silicon_bridge::FpgaParameterExporter;
 
-let params = FpgaParameters {
-    weights:    vec![0.5, -0.3, 0.8, /* ... */],
-    thresholds: vec![0.6; 16],
-    decay_rates: vec![0.9; 16],
-};
+let mut exporter = FpgaParameterExporter::new();
+exporter.set_thresholds(vec![0.6; 16]);
+exporter.set_weights(vec![vec![0.5; 16]; 16]);
+exporter.set_decay_rates(vec![0.9; 16]);
 
-let exporter = FpgaParameterExporter::new();
-exporter.export_mem("weights.mem", &params)?;
-// → weights.mem ready for Vivado $readmemh
+let params = exporter.export();
+// → params.thresholds, .weights, .decay_rates are Vec<u16> (Q8.8 format)
+// → ready for Vivado $readmemh
 ```
 
 ### UART Spike Readback
