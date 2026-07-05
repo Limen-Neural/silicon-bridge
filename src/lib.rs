@@ -9,7 +9,7 @@
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
 //! - **Vivado timing report parsing** for WNS/LUT utilization CI/CD gating
 //!
-//! Licensed under either of [MIT](../LICENSE-MIT) or [Apache-2.0](../LICENSE-APACHE) at your option.
+//! Licensed under either MIT or Apache-2.0 at your option.
 //!
 //! ## Provenance
 //!
