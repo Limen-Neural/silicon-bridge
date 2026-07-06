@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! FPGA Synthesis Metrics — Vivado Report Parser
 //!
 //! Parses timing and resource utilization data from Vivado implementation reports.

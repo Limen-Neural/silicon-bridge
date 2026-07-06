@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://crates.io/crates/silicon-bridge"><img src="https://img.shields.io/crates/v/silicon-bridge" alt="crates.io"></a>
   <a href="https://docs.rs/silicon-bridge"><img src="https://docs.rs/silicon-bridge/badge.svg" alt="docs.rs"></a>
-  <img src="https://img.shields.io/badge/license-GPL--3.0-orange" alt="GPL-3.0">
+  <img src="https://img.shields.io/badge/license-MIT%2FApache--2.0-blue" alt="MIT/Apache-2.0">
 </p>
 
 ---
@@ -38,17 +38,16 @@ silicon-bridge = "0.1"
 ### Export Parameters
 
 ```rust
-use silicon_bridge::{FpgaParameterExporter, FpgaParameters};
+use silicon_bridge::FpgaParameterExporter;
 
-let params = FpgaParameters {
-    weights:    vec![0.5, -0.3, 0.8, /* ... */],
-    thresholds: vec![0.6; 16],
-    decay_rates: vec![0.9; 16],
-};
+let mut exporter = FpgaParameterExporter::new();
+exporter.set_thresholds(vec![0.6; 16]);
+exporter.set_weights(vec![vec![0.5; 16]; 16]);
+exporter.set_decay_rates(vec![0.9; 16]);
 
-let exporter = FpgaParameterExporter::new();
-exporter.export_mem("weights.mem", &params)?;
-// → weights.mem ready for Vivado $readmemh
+let params = exporter.export();
+// → params.thresholds, .weights, .decay_rates are Vec<u16> (Q8.8 format)
+// → ready for Vivado $readmemh
 ```
 
 ### UART Spike Readback
@@ -87,4 +86,4 @@ training orchestrator so it works with any SNN framework.
 
 ## License
 
-GPL-3.0-or-later
+Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your option.

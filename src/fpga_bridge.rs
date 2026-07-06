@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! FPGA Spike Readback — UART Bridge to Basys3 Hardware
 //!
 //! Handles UART communication with Basys3 FPGA to send stimuli

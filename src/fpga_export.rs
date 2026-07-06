@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
 //! FPGA Parameter Export - Spikenaut-v2 Deployment
 //!
 //! Q8.8 fixed-point parameter export for FPGA deployment.
