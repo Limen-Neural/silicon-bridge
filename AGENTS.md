@@ -24,7 +24,11 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 
 ## Project overview
 
-`silicon-bridge` is a Rust crate for SNN (Spiking Neural Network)-to-FPGA deployment. It exports trained SNN parameters as Q8.8 fixed-point `.mem` files for Vivado synthesis, provides a UART bridge for runtime spike exchange, and parses Vivado timing reports for CI/CD gating.
+`silicon-bridge` is a Rust project for SNN (Spiking Neural Network)-to-FPGA (Field-Programmable Gate Array) deployment.
+
+- `fpga_export` exports trained SNN parameters as Q8.8 fixed-point `.mem` files for Vivado synthesis.
+- `fpga_metrics` parses Vivado timing reports for CI/CD gating.
+- `fpga_bridge` provides a UART bridge for runtime spike exchange (`uart` feature, `serialport`).
 
 - **License**: dual MIT (Massachusetts Institute of Technology) / Apache-2.0
 - **Rust edition**: 2024
@@ -58,7 +62,7 @@ Run before every commit:
 cargo test
 ```
 
-All 4 tests must pass before pushing. Add tests for any new code you write.
+All tests must pass before pushing. Add tests for any new code you write.
 
 ## Code style
 
