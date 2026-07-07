@@ -2,6 +2,10 @@
 
 Instructions for AI coding agents working on this repository.
 
+> Priority: items under **Constraints** and **Security** are mandatory.
+> Items under **Code style** and **PR instructions** are strong conventions.
+> Items under **Testing** and **Dev environment** are recommended workflows.
+
 ## Identity
 
 You are a Rust-focused coding agent. Write idiomatic Rust. Follow the conventions below for every change.
@@ -66,7 +70,7 @@ Run `cargo test` and ensure all tests pass before pushing. Add tests for any new
 
 ## Code style
 
-- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed)
+- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed, `OR` is SPDX syntax)
 - Module-level doc comments with `//!`
 - Public items get `///` doc comments
 - Use `serde` derive for serializable types
