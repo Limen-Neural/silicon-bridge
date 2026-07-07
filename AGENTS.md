@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> **Priority order**: Constraints > Security > Code style > PR instructions > Testing > Dev environment.
+> **Priority order**: Constraints > Code style > PR instructions > Testing > Dev environment.
 > Items marked mandatory must never be violated. Conventions should be followed unless there's a good reason not to. Workflows are recommended.
 
 Instructions for AI coding agents working on this repository.
@@ -16,16 +16,11 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 - Do not downgrade Rust edition from 2024 to 2021
 - Do not add unused dependencies — check if a crate is actually imported before adding it
 - Do not use relative links to license files in doc comments (they break on docs.rs)
-
-## Security (mandatory)
-
-- No secrets, API keys, DSNs, or credentials in code or commits
-- No `unsafe` code without explicit justification
 - UART (Universal Asynchronous Receiver-Transmitter) feature is properly gated behind `#[cfg(feature = "uart")]`
 
 ## Code style (conventions)
 
-- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed, `OR` is SPDX syntax for dual licensing)
+- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed; the keyword `OR` is SPDX syntax for dual licensing)
 - Module-level doc comments with `//!`
 - Public items get `///` doc comments
 - Use `serde` derive for serializable types
