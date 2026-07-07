@@ -128,34 +128,36 @@ impl FpgaParameterExporter {
 
         let params = self.export();
 
-        // Export thresholds
-        let thresholds_path = output_dir.as_ref().join("parameters.mem");
-        let mut thresholds_file = fs::File::create(thresholds_path)?;
-        for threshold in &params.thresholds {
-            writeln!(thresholds_file, "{:04X}", threshold)?;
-        }
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters.mem"),
+            &params.thresholds,
+        )?;
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters_weights.mem"),
+            &params.weights,
+        )?;
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters_decay.mem"),
+            &params.decay_rates,
+        )?;
 
-        // Export weights
-        let weights_path = output_dir.as_ref().join("parameters_weights.mem");
-        let mut weights_file = fs::File::create(weights_path)?;
-        for weight in &params.weights {
-            writeln!(weights_file, "{:04X}", weight)?;
-        }
-
-        // Export decay rates
-        let decay_path = output_dir.as_ref().join("parameters_decay.mem");
-        let mut decay_file = fs::File::create(decay_path)?;
-        for decay in &params.decay_rates {
-            writeln!(decay_file, "{:04X}", decay)?;
-        }
-
-        // Export metadata
         let metadata_path = output_dir.as_ref().join("parameters.json");
         let metadata_json = serde_json::to_string_pretty(&params)?;
         fs::write(metadata_path, metadata_json)?;
 
         self.print_export_summary(&params, output_dir);
 
+        Ok(())
+    }
+
+    fn write_mem_file(
+        path: impl AsRef<Path>,
+        values: &[u16],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = fs::File::create(path)?;
+        for value in values {
+            writeln!(file, "{:04X}", value)?;
+        }
         Ok(())
     }
 
