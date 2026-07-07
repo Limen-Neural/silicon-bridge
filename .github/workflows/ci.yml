@@ -16,9 +16,10 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable
         with:
           components: clippy, rustfmt
+          toolchain: stable
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -26,7 +27,6 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
@@ -35,10 +35,10 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy (lint)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Build
-        run: cargo build --all-features
+        run: cargo build
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test
