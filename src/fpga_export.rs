@@ -262,10 +262,10 @@ mod tests {
         assert_eq!(params.metadata.num_neurons, 3);
         assert_eq!(params.metadata.num_channels, 3);
 
-        // Verify Q8.8 values are in range (u16 is always <= 65535 by definition)
-        assert!(!params.thresholds.is_empty());
-        assert!(!params.weights.is_empty());
-        assert!(!params.decay_rates.is_empty());
+        // Verify converted Q8.8 values are correct
+        assert_eq!(params.thresholds, vec![256, 204, 307]);
+        assert_eq!(params.weights, vec![128, 256, 76, 179, 230, 281, 102, 153, 204]);
+        assert_eq!(params.decay_rates, vec![217, 230, 204]);
     }
 
     #[test]
