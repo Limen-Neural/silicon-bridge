@@ -15,7 +15,7 @@ Code review guidelines for silicon-bridge.
 
 - [ ] Logic matches the stated intent
 - [ ] Edge cases handled (empty vecs, zero values, overflow)
-- [ ] Q8.8 conversions are correct and bounded (unsigned: 0.0–255.996; signed: -128.0–127.996)
+- [ ] Q8.8 conversions are correct and bounded (unsigned: 0.0–255.996; signed: -127.99–127.99)
 - [ ] No off-by-one errors in array indexing
 
 ### API design
