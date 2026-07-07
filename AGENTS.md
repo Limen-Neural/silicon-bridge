@@ -1,16 +1,15 @@
 # AGENTS.md
 
-Instructions for AI coding agents working on this repository.
+> **Priority order**: Constraints > Security > Code style > PR instructions > Testing > Dev environment.
+> Items marked mandatory must never be violated. Conventions should be followed unless there's a good reason not to. Workflows are recommended.
 
-> Priority: items under **Constraints** and **Security** are mandatory.
-> Items under **Code style** and **PR instructions** are strong conventions.
-> Items under **Testing** and **Dev environment** are recommended workflows.
+Instructions for AI coding agents working on this repository.
 
 ## Identity
 
 You are a Rust-focused coding agent. Write idiomatic Rust. Follow the conventions below for every change.
 
-## Constraints
+## Constraints (mandatory)
 
 - Do not commit secrets, API keys, DSNs, or credentials
 - Do not add `unsafe` code without explicit safety justification
@@ -18,12 +17,37 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 - Do not add unused dependencies — check if a crate is actually imported before adding it
 - Do not use relative links to license files in doc comments (they break on docs.rs)
 
+## Security (mandatory)
+
+- No secrets, API keys, DSNs, or credentials in code or commits
+- No `unsafe` code without explicit justification
+- UART (Universal Asynchronous Receiver-Transmitter) feature is properly gated behind `#[cfg(feature = "uart")]`
+
+## Code style (conventions)
+
+- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed, `OR` is SPDX syntax for dual licensing)
+- Module-level doc comments with `//!`
+- Public items get `///` doc comments
+- Use `serde` derive for serializable types
+- Use `f32` for public API parameters (consistent with existing API)
+- Conventional Commits for messages: `type(scope): description`
+
+  - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
+  - Scopes: `fpga-export`, `fpga-metrics`, `fpga-bridge`, `ci`, `docs`
+
+## PR instructions (conventions)
+
+- Branch naming: `feat/`, `fix/`, `chore/`, `docs/` prefix
+- Run `cargo test` and `cargo check` before pushing
+- One issue per PR — split multi-issue work into separate PRs
+- Link PR to the issue it addresses
+
 ## Tools
 
 - `cargo check` — compile check
 - `cargo test` — run unit tests and doctests
 - `cargo build --release` — optimized build
-- `cargo build --features uart` — build with UART (Universal Asynchronous Receiver-Transmitter) bridge (requires `serialport`)
+- `cargo build --features uart` — build with UART bridge (requires `serialport`)
 - `cargo clippy` — lint
 
 ## Project overview
@@ -38,7 +62,7 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 - **Rust edition**: 2024
 - **Crate type**: library (`silicon_bridge`)
 
-## Dev environment tips
+## Dev environment tips (recommended)
 
 ```bash
 cargo check                 # quick compile check
@@ -51,7 +75,7 @@ Feature flags:
 
 - `uart` — enables `FpgaBridge` and `find_fpga_ports` (requires `serialport` crate)
 
-## Testing instructions
+## Testing instructions (recommended)
 
 Tests live inline in source files:
 
@@ -60,35 +84,4 @@ Tests live inline in source files:
 | `src/fpga_export.rs` | 3 unit tests | Q8.8 conversion, parameter export, memory calculation |
 | `src/lib.rs` | 1 doctest | Quick Start example |
 
-Run before every commit:
-
-```bash
-cargo test
-```
-
 Run `cargo test` and ensure all tests pass before pushing. Add tests for any new code you write.
-
-## Code style
-
-- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed, `OR` is SPDX syntax)
-- Module-level doc comments with `//!`
-- Public items get `///` doc comments
-- Use `serde` derive for serializable types
-- Use `f32` for public API parameters (consistent with existing API)
-- Conventional Commits for messages: `type(scope): description`
-
-  - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
-  - Scopes: `fpga-export`, `fpga-metrics`, `fpga-bridge`, `ci`, `docs`
-
-## PR instructions
-
-- Branch naming: `feat/`, `fix/`, `chore/`, `docs/` prefix
-- Run `cargo test` and `cargo check` before pushing
-- One issue per PR — split multi-issue work into separate PRs
-- Link PR to the issue it addresses
-
-## Security
-
-- No secrets, API keys, DSNs, or credentials in code or commits
-- No `unsafe` code without explicit justification
-- UART feature is properly gated behind `#[cfg(feature = "uart")]`
