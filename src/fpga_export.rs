@@ -264,7 +264,10 @@ mod tests {
 
         // Verify converted Q8.8 values are correct
         assert_eq!(params.thresholds, vec![256, 204, 307]);
-        assert_eq!(params.weights, vec![128, 256, 76, 179, 230, 281, 102, 153, 204]);
+        assert_eq!(
+            params.weights,
+            vec![128, 256, 76, 179, 230, 281, 102, 153, 204]
+        );
         assert_eq!(params.decay_rates, vec![217, 230, 204]);
     }
 
