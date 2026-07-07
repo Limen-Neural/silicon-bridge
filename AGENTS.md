@@ -20,7 +20,7 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 
 ## Code style (conventions)
 
-- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed; the keyword `OR` is SPDX syntax for dual licensing)
+- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed under MIT (Massachusetts Institute of Technology) and Apache-2.0; the keyword `OR` is SPDX syntax for dual licensing)
 - Module-level doc comments with `//!`
 - Public items get `///` doc comments
 - Use `serde` derive for serializable types
