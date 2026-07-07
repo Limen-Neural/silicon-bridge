@@ -44,7 +44,7 @@ All 4 tests must pass. Add tests for any new code you write.
 - Module-level doc comments with `//!`
 - Public items get `///` doc comments
 - Use `serde` derive for serializable types
-- Prefer `Real` type bounds over `Float32` for public kwargs (accepts f32, i32, etc.)
+- Use `f32` for public API parameters (consistent with existing API)
 - Conventional Commits for messages: `type(scope): description`
   - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
   - Scopes: `fpga-export`, `fpga-metrics`, `fpga-bridge`, `ci`, `docs`

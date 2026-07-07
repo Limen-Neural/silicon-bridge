@@ -15,14 +15,14 @@ Code review guidelines for silicon-bridge.
 
 - [ ] Logic matches the stated intent
 - [ ] Edge cases handled (empty vecs, zero values, overflow)
-- [ ] Q8.8 conversions are correct and bounded (0.0–255.996 unsigned)
+- [ ] Q8.8 conversions are correct and bounded (unsigned: 0.0–255.996; signed: -128.0–127.996)
 - [ ] No off-by-one errors in array indexing
 
 ### API design
 
 - [ ] Public types use `pub` appropriately — don't expose internals
 - [ ] Builder pattern (e.g., `FpgaParameterExporter`) is ergonomic
-- [ ] Prefer `Real` type bounds over `Float32` for public kwargs
+- [ ] Public API parameters use `f32` consistently (matching existing types)
 - [ ] Breaking changes are documented in CHANGELOG.md
 
 ### Documentation
