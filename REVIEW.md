@@ -93,3 +93,37 @@ Check if new dependencies are actually imported. `rand` is currently listed but 
 
 - May suggest edition downgrade — ignore if edition 2024 is intentional
 - Variable naming suggestions are usually reasonable
+
+### Kilo Code Review
+
+- Reply `@kilocode-bot fix it` to any suggestion thread to auto-fix the issue
+- Kilo runs `cargo test`, `cargo check`, `cargo clippy` when applying fixes
+- Flags unused dependencies, type mismatches, missing tests
+- Suggestions are generally correct — fix unless there's a specific reason not to
+- Review suggestions before approving — Kilo can make mistakes
+
+### Devin Review
+
+- Auto-reviews PRs on push — no manual trigger needed
+- With Auto-Fix enabled, Devin auto-responds to review comments and fixes flagged bugs
+- Checks: correctness, coding standards, style guides, security requirements
+- Use Devin Review chat to ask specific questions about the code
+- Runs as a CI check — verify it passes before merging
+
+## CI/CD reference
+
+| Check | Trigger | Behavior |
+|-------|---------|----------|
+| CodeRabbit | Push to PR | Auto-reviews, auto-resolves when fix is pushed |
+| Devin Review | Push to PR | Auto-reviews, can auto-fix with Auto-Fix enabled |
+| Kilo Code Review | Push to PR | Suggests fixes via review threads |
+| Codacy | Push to PR | Markdown lint, configured to skip docs via `.codacy.yml` |
+
+Run locally before pushing:
+
+```bash
+cargo check                 # compile check
+cargo test                  # all unit + doc tests
+cargo clippy                # lint
+cargo build --features uart # verify UART feature compiles
+```
