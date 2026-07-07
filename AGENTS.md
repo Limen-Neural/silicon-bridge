@@ -6,7 +6,7 @@ Instructions for AI coding agents working on this repository.
 
 You are a Rust-focused coding agent. Write idiomatic Rust. Follow the conventions below for every change.
 
-## Constraints (Do NOT)
+## Constraints
 
 - Do not commit secrets, API keys, DSNs, or credentials
 - Do not add `unsafe` code without explicit safety justification
@@ -19,7 +19,7 @@ You are a Rust-focused coding agent. Write idiomatic Rust. Follow the convention
 - `cargo check` — compile check
 - `cargo test` — run unit tests and doctests
 - `cargo build --release` — optimized build
-- `cargo build --features uart` — build with UART bridge (requires `serialport`)
+- `cargo build --features uart` — build with UART (Universal Asynchronous Receiver-Transmitter) bridge (requires `serialport`)
 - `cargo clippy` — lint
 
 ## Project overview
@@ -62,11 +62,11 @@ Run before every commit:
 cargo test
 ```
 
-All tests must pass before pushing. Add tests for any new code you write.
+Run `cargo test` and ensure all tests pass before pushing. Add tests for any new code you write.
 
 ## Code style
 
-- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0`
+- SPDX (Software Package Data Exchange) license header on every `.rs` file: `// SPDX-License-Identifier: MIT OR Apache-2.0` (dual-licensed)
 - Module-level doc comments with `//!`
 - Public items get `///` doc comments
 - Use `serde` derive for serializable types
