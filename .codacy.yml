@@ -1,0 +1,4 @@
+exclude_patterns:
+  - "AGENTS.md"
+  - "REVIEW.md"
+  - "CHANGELOG.md"
