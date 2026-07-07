@@ -49,7 +49,8 @@ impl FpgaMetrics {
 
     /// Attempt to load metrics from the canonical implementation report path.
     pub fn load_from_project() -> Option<Self> {
-        let report_path = "fpga-project/ship_ssn_logic.runs/impl_1/Basys3_Top_timing_summary_routed.rpt";
+        let report_path =
+            "fpga-project/ship_ssn_logic.runs/impl_1/Basys3_Top_timing_summary_routed.rpt";
         let text = std::fs::read_to_string(report_path).ok()?;
         let wns = Self::parse_from_report(&text)?;
         Some(Self {

@@ -4,13 +4,13 @@
 //! Q8.8 fixed-point parameter export for FPGA deployment.
 //! Converts learned parameters to hardware-compatible format.
 
-use std::fs;
-use std::path::Path;
-use std::io::Write;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::Write;
+use std::path::Path;
 
 /// FPGA parameter exporter for Spikenaut-v2
-/// 
+///
 /// Exports learned SNN parameters in Q8.8 fixed-point format
 /// for FPGA deployment with <35µs/tick target performance.
 pub struct FpgaParameterExporter {
@@ -77,24 +77,26 @@ impl FpgaParameterExporter {
 
     /// Export parameters to FPGA-compatible format
     pub fn export(&self) -> FpgaParameters {
-        let thresholds_q88: Vec<u16> = self.thresholds.iter()
-            .map(|&v| self.to_q88(v))
-            .collect();
+        let thresholds_q88: Vec<u16> = self.thresholds.iter().map(|&v| self.to_q88(v)).collect();
 
-        let weights_q88: Vec<u16> = self.weights.iter()
+        let weights_q88: Vec<u16> = self
+            .weights
+            .iter()
             .flat_map(|row| row.iter())
             .map(|&v| self.to_q88(v))
             .collect();
 
-        let decay_rates_q88: Vec<u16> = self.decay_rates.iter()
-            .map(|&v| self.to_q88(v))
-            .collect();
+        let decay_rates_q88: Vec<u16> = self.decay_rates.iter().map(|&v| self.to_q88(v)).collect();
 
         let metadata = FpgaMetadata {
             version: "Spikenaut-v2".to_string(),
             timestamp: chrono::Utc::now().to_rfc3339(),
             num_neurons: self.thresholds.len(),
-            num_channels: if self.weights.is_empty() { 0 } else { self.weights[0].len() },
+            num_channels: if self.weights.is_empty() {
+                0
+            } else {
+                self.weights[0].len()
+            },
             target_latency_us: 35.0,
             memory_usage_kb: self.calculate_memory_usage(),
         };
@@ -109,16 +111,19 @@ impl FpgaParameterExporter {
 
     /// Calculate memory usage in KB
     fn calculate_memory_usage(&self) -> f32 {
-        let total_params = self.thresholds.len() + 
-                          self.weights.iter().map(|row| row.len()).sum::<usize>() + 
-                          self.decay_rates.len();
-        
+        let total_params = self.thresholds.len()
+            + self.weights.iter().map(|row| row.len()).sum::<usize>()
+            + self.decay_rates.len();
+
         // Each parameter is 2 bytes (u16) in Q8.8 format
         (total_params * 2) as f32 / 1024.0
     }
 
     /// Export parameters to .mem files for FPGA
-    pub fn export_to_mem_files<P: AsRef<Path>>(&self, output_dir: P) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn export_to_mem_files<P: AsRef<Path>>(
+        &self,
+        output_dir: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(&output_dir)?;
 
         let params = self.export();
@@ -166,16 +171,29 @@ impl FpgaParameterExporter {
         println!("Memory Usage: {:.2} KB", params.metadata.memory_usage_kb);
         println!();
         println!("Files Generated:");
-        println!("  parameters.mem         - {} thresholds", params.thresholds.len());
-        println!("  parameters_weights.mem - {} weights", params.weights.len());
-        println!("  parameters_decay.mem   - {} decay rates", params.decay_rates.len());
+        println!(
+            "  parameters.mem         - {} thresholds",
+            params.thresholds.len()
+        );
+        println!(
+            "  parameters_weights.mem - {} weights",
+            params.weights.len()
+        );
+        println!(
+            "  parameters_decay.mem   - {} decay rates",
+            params.decay_rates.len()
+        );
         println!("  parameters.json        - metadata and configuration");
         println!();
         println!("SUCCESS: FPGA parameters ready for deployment");
     }
 
     /// Create an exporter pre-populated with given parameters.
-    pub fn from_params(thresholds: Vec<f32>, weights: Vec<Vec<f32>>, decay_rates: Vec<f32>) -> Self {
+    pub fn from_params(
+        thresholds: Vec<f32>,
+        weights: Vec<Vec<f32>>,
+        decay_rates: Vec<f32>,
+    ) -> Self {
         Self {
             thresholds,
             weights,
@@ -209,12 +227,12 @@ mod tests {
     #[test]
     fn test_q88_conversion() {
         let exporter = FpgaParameterExporter::new();
-        
+
         // Test basic conversions
         assert_eq!(exporter.to_q88(0.0), 0);
         assert_eq!(exporter.to_q88(1.0), 256);
         assert_eq!(exporter.to_q88(255.0), 65280);
-        
+
         // Test precision
         assert_eq!(q88_to_f32(256), 1.0);
         assert_eq!(q88_to_f32(0), 0.0);
@@ -224,7 +242,7 @@ mod tests {
     #[test]
     fn test_parameter_export() {
         let mut exporter = FpgaParameterExporter::new();
-        
+
         // Set test parameters
         exporter.set_thresholds(vec![1.0, 0.8, 1.2]);
         exporter.set_weights(vec![
@@ -233,40 +251,34 @@ mod tests {
             vec![0.4, 0.6, 0.8],
         ]);
         exporter.set_decay_rates(vec![0.85, 0.9, 0.8]);
-        
+
         // Export to FPGA format
         let params = exporter.export();
-        
+
         // Verify conversion
         assert_eq!(params.thresholds.len(), 3);
         assert_eq!(params.weights.len(), 9); // 3x3
         assert_eq!(params.decay_rates.len(), 3);
         assert_eq!(params.metadata.num_neurons, 3);
         assert_eq!(params.metadata.num_channels, 3);
-        
-        // Verify Q8.8 values are in range
-        for threshold in &params.thresholds {
-            assert!(*threshold <= 65535);
-        }
-        for weight in &params.weights {
-            assert!(*weight <= 65535);
-        }
-        for decay in &params.decay_rates {
-            assert!(*decay <= 65535);
-        }
+
+        // Verify Q8.8 values are in range (u16 is always <= 65535 by definition)
+        assert!(!params.thresholds.is_empty());
+        assert!(!params.weights.is_empty());
+        assert!(!params.decay_rates.is_empty());
     }
 
     #[test]
     fn test_memory_calculation() {
         let mut exporter = FpgaParameterExporter::new();
-        
+
         // Set parameters for 16 neurons, 16 channels
         exporter.set_thresholds(vec![1.0; 16]);
         exporter.set_weights(vec![vec![0.5; 16]; 16]);
         exporter.set_decay_rates(vec![0.85; 16]);
-        
+
         let params = exporter.export();
-        
+
         // Expected memory: (16 + 256 + 16) * 2 bytes = 576 bytes = 0.5625 KB
         assert!((params.metadata.memory_usage_kb - 0.5625).abs() < 0.01);
     }

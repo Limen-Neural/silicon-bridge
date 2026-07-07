@@ -6,9 +6,9 @@
 //!
 //! Extracted from Eagle-Lander's Ship of Theseus neuromorphic core.
 
-use std::time::Duration;
 use serialport::{SerialPort, SerialPortInfo};
 use std::io::{Read, Write};
+use std::time::Duration;
 
 pub struct FpgaBridge {
     port: Box<dyn SerialPort>,
@@ -20,25 +20,23 @@ impl FpgaBridge {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Try common USB ports for Basys3
         let ports = ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyUSB2"];
-        
+
         for port_name in &ports {
             match serialport::new(*port_name, 115_200)
                 .timeout(Duration::from_millis(100))
-                .open() {
+                .open()
+            {
                 Ok(port) => {
                     println!("[fpga] Connected to FPGA on {}", port_name);
-                    return Ok(FpgaBridge {
-                        port,
-                        active: true,
-                    });
+                    return Ok(FpgaBridge { port, active: true });
                 }
                 Err(_) => continue,
             }
         }
-        
+
         Err("FPGA not found on any USB port".into())
     }
-    
+
     /// Send neural stimuli to FPGA and read back spike states.
     ///
     /// Protocol (16-neuron SiliconBridge v3.0):
@@ -47,7 +45,10 @@ impl FpgaBridge {
     ///
     /// Input is accepted as a dynamic slice; if fewer than 16 values are provided,
     /// remaining channels are zero-padded. If more are provided, only the first 16 are sent.
-    pub fn process_stimuli(&mut self, stimuli: &[f32]) -> Result<(Vec<f32>, Vec<bool>), Box<dyn std::error::Error>> {
+    pub fn process_stimuli(
+        &mut self,
+        stimuli: &[f32],
+    ) -> Result<(Vec<f32>, Vec<bool>), Box<dyn std::error::Error>> {
         if !self.active {
             return Err("FPGA bridge not active".into());
         }
@@ -71,7 +72,7 @@ impl FpgaBridge {
         // Parse potentials (Q8.8 back to f32)
         let mut potentials = Vec::with_capacity(16);
         for i in 0..16 {
-            let raw = i16::from_be_bytes([rx_data[i*2], rx_data[i*2+1]]);
+            let raw = i16::from_be_bytes([rx_data[i * 2], rx_data[i * 2 + 1]]);
             potentials.push(raw as f32 / 256.0);
         }
 
@@ -82,7 +83,7 @@ impl FpgaBridge {
 
         Ok((potentials, spikes))
     }
-    
+
     /// Check if FPGA is responsive
     pub fn ping(&mut self) -> bool {
         let test_stimuli = [0.1; 16];
@@ -94,7 +95,7 @@ impl FpgaBridge {
             }
         }
     }
-    
+
     /// Get connection status
     pub fn is_active(&self) -> bool {
         self.active
@@ -104,7 +105,8 @@ impl FpgaBridge {
 /// Find FPGA ports on the system
 pub fn find_fpga_ports() -> Vec<SerialPortInfo> {
     match serialport::available_ports() {
-        Ok(ports) => ports.into_iter()
+        Ok(ports) => ports
+            .into_iter()
             .filter(|p| p.port_name.contains("ttyUSB"))
             .collect(),
         Err(_) => Vec::new(),

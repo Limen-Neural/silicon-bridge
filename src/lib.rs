@@ -46,11 +46,7 @@ mod fpga_bridge;
 
 // Re-export public API
 pub use fpga_export::{
-    FpgaParameterExporter,
-    FpgaParameters,
-    FpgaMetadata,
-    format_q88_hex,
-    q88_to_f32,
+    FpgaMetadata, FpgaParameterExporter, FpgaParameters, format_q88_hex, q88_to_f32,
 };
 
 pub use fpga_metrics::FpgaMetrics;
