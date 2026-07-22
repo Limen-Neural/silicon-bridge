@@ -15,7 +15,9 @@ parameters and FPGA hardware in the Limen-Neural stack. It:
    `$readmemh` `.mem` files
 2. Optionally exchanges stimuli / spikes with the FPGA over **UART**
    (`uart` feature)
-3. Parses **Vivado timing reports** (WNS, TNS, utilization) for CI gating
+3. Parses **Vivado timing reports for WNS** (worst negative slack) for CI gating.
+   `FpgaMetrics` also *exposes* a `lut_utilization` field, but loaders currently leave
+   it at `0.0` and **do not parse TNS** — do not treat TNS or LUT % as enforced gates yet
 
 It is **not** a spiking runtime, training loop, or HDL library.
 
@@ -46,7 +48,7 @@ training / runtime crates
 | `.mem` generation | Hex lines for `$readmemh` (thresholds, weights, decay) |
 | Export trait surface | Traits such as fixed-point encode / parameter export / mem write (for silicon-hdl alignment) |
 | UART host client | SiliconBridge-style host protocol when `uart` is enabled |
-| Timing metrics | Parse Vivado reports for CI gates |
+| Timing metrics | Parse WNS from Vivado timing summary reports for CI gates (TNS / LUT % not yet) |
 | Deployment metadata | Version/timestamp/size of exported parameter sets |
 
 ## Does not own
@@ -72,8 +74,10 @@ Current and intentional:
 |-------|-----|
 | `serde` / `serde_json` | Parameter metadata JSON |
 | `chrono` | Export timestamps |
-| `rand` | Existing support code paths |
 | `serialport` (optional) | UART feature only |
+
+Do **not** list unused crates as allowed. `rand` was previously in `Cargo.toml` with
+no `src/` imports; it is not an intentional dependency (see REVIEW.md).
 
 Future (allowed when explicitly landed):
 

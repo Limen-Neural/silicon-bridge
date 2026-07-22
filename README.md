@@ -27,7 +27,7 @@ back spike states at runtime.
 - `FpgaParameterExporter` — default implementation of those traits
 - `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
 - `FpgaBridge` — UART protocol for host–FPGA spike exchange (`uart` feature)
-- `FpgaMetrics` — Vivado timing report parser (WNS, TNS, LUT utilization) for CI/CD gating
+- `FpgaMetrics` — Vivado timing report parser (**WNS** for CI/CD gating; LUT field reserved / not parsed yet)
 
 ## Installation
 

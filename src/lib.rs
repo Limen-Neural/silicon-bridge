@@ -8,7 +8,7 @@
 //!   `MemFileWriter`) for [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)
 //!   `WeightRam` / `NeuronParamRam` via Vivado `$readmemh`
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
-//! - **Vivado timing report parsing** for WNS/LUT utilization CI/CD gating
+//! - **Vivado timing report parsing** for WNS-based CI/CD gating
 //!
 //! Licensed under either of MIT or Apache-2.0 at your option.
 //!

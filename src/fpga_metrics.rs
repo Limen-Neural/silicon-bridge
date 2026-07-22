@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! FPGA Synthesis Metrics — Vivado Report Parser
 //!
-//! Parses timing and resource utilization data from Vivado implementation reports.
+//! Parses **WNS** from Vivado timing summary reports for CI gating.
+//! LUT utilization is reserved on [`FpgaMetrics`] but not filled from reports yet.
 //! Extracted from Eagle-Lander's SpikingInferenceEngine (engine.rs).
 
 use serde::{Deserialize, Serialize};

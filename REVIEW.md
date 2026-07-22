@@ -70,7 +70,7 @@ Lists in CHANGELOG.md need a blank line before them:
 
 ### Unused dependencies
 
-Check if new dependencies are actually imported. `rand` is currently listed but unused — avoid adding more dead dependencies.
+Check if new dependencies are actually imported. Do not reintroduce unused crates (e.g. the former unused `rand` dependency).
 
 ## AI reviewer notes
 
