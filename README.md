@@ -66,7 +66,7 @@ let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 
 ```
 Q8.8:  value = raw_u16 / 256.0
-       raw   = round(value × 256)
+       raw   = clamp(value × 256, 0, 65535) truncated to u16
 Range: [0, 255.996]  (unsigned)
        [-128, 127.996]  (signed, two's complement)
 ```
