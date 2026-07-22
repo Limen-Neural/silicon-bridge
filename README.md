@@ -20,12 +20,14 @@ back spike states at runtime.
 
 ## Features
 
-- `FpgaParameterExporter` — serialize SNN weights/thresholds to Q8.8 `.mem` format
-- `to_q88(value)` — convert `f32` to Q8.8 fixed-point (`value × 256 → u16`)
-- `FpgaBridge` — async UART protocol for host-FPGA spike exchange
+- **Export traits** for hardware alignment with [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl):
+  - `FixedPointEncode` — `f32` → Q8.8 (`u16`)
+  - `ParameterExport` — build the FPGA parameter bundle
+  - `MemFileWriter` — write `$readmemh` `.mem` files
+- `FpgaParameterExporter` — default implementation of those traits
+- `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
+- `FpgaBridge` — UART protocol for host–FPGA spike exchange (`uart` feature)
 - `FpgaMetrics` — Vivado timing report parser (WNS, TNS, LUT utilization) for CI/CD gating
-- Generic `FixedPoint<INT_BITS, FRAC_BITS>` type (Q8.8, Q4.12, Q12.4, …)
-- Round-trip validation: export → program FPGA → read back → compare
 
 ## Installation
 
@@ -38,16 +40,16 @@ silicon-bridge = "0.1"
 ### Export Parameters
 
 ```rust
-use silicon_bridge::FpgaParameterExporter;
+use silicon_bridge::{FpgaParameterExporter, ParameterExport};
 
 let mut exporter = FpgaParameterExporter::new();
 exporter.set_thresholds(vec![0.6; 16]);
 exporter.set_weights(vec![vec![0.5; 16]; 16]);
 exporter.set_decay_rates(vec![0.9; 16]);
 
-let params = exporter.export();
+let params = ParameterExport::export(&exporter);
 // → params.thresholds, .weights, .decay_rates are Vec<u16> (Q8.8 format)
-// → ready for Vivado $readmemh
+// → ready for silicon-hdl WeightRam / NeuronParamRam via Vivado $readmemh
 ```
 
 ### UART Spike Readback
@@ -64,7 +66,7 @@ let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 
 ```
 Q8.8:  value = raw_u16 / 256.0
-       raw   = round(value × 256)
+       raw   = clamp(value × 256, 0, 65535) truncated to u16
 Range: [0, 255.996]  (unsigned)
        [-128, 127.996]  (signed, two's complement)
 ```
@@ -87,9 +89,9 @@ training orchestrator so it works with any SNN framework.
 
 | Library | Purpose |
 |---------|---------|
-| [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl) | SystemVerilog core, bridge, and SoC |
-| [neuromod](https://github.com/Limen-Neural/neuromod) | SNN dynamics / core runtime |
-| [SynapticDistill.jl](https://github.com/Limen-Neural/SynapticDistill.jl) | Julia training + distillation |
+| [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl) | SystemVerilog core, bridge, and SoC for Basys3 / Artix-7 |
+| [SynapticDistill.jl](https://github.com/Limen-Neural/SynapticDistill.jl) | Julia training + distillation (Q8.8 export path) |
+| [neuromod](https://github.com/Limen-Neural/neuromod) | SNN dynamics / core runtime traits |
 
 ## License
 
