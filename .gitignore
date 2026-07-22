@@ -1,9 +1,29 @@
-/target
+# Build / package
+/target/
 Cargo.lock
 *.crate
-.mimocode/
-.codex/
-.mimo/
-.cursor/
-.vscode/
+
+# AI / agent tooling
 .kilo/
+.kilocode/state/
+.mimocode/
+.opencode/cache/
+.codex/
+.ai/
+.junie/state/
+.cursor/
+.cline/
+.swarm/
+.worktrees/
+.beads/*.db
+.beads/*.db-*
+
+# IDE
+.idea/
+.vscode/
+.zed/
+
+# OS / editor
+.DS_Store
+*.swp
+*~
