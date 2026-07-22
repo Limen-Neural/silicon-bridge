@@ -4,8 +4,9 @@
 //! SNN-to-FPGA deployment pipeline for FPGA-backed neuromorphic hardware.
 //!
 //! This crate provides:
-//! - **Q8.8 fixed-point parameter export** from trained SNN weights to `.mem` hex files
-//!   compatible with Vivado `$readmemh` synthesis
+//! - **Q8.8 fixed-point parameter export** (`FixedPointEncode`, `ParameterExport`,
+//!   `MemFileWriter`) for [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)
+//!   `WeightRam` / `NeuronParamRam` via Vivado `$readmemh`
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
 //! - **Vivado timing report parsing** for WNS/LUT utilization CI/CD gating
 //!
@@ -46,7 +47,8 @@ mod fpga_bridge;
 
 // Re-export public API
 pub use fpga_export::{
-    FpgaMetadata, FpgaParameterExporter, FpgaParameters, format_q88_hex, q88_to_f32,
+    EXPORT_FORMAT_VERSION, FixedPointEncode, FpgaMetadata, FpgaParameterExporter, FpgaParameters,
+    MemFileWriter, ParameterExport, format_q88_hex, q88_to_f32,
 };
 
 pub use fpga_metrics::FpgaMetrics;

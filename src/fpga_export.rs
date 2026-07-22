@@ -1,18 +1,62 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! FPGA Parameter Export - Spikenaut-v2 Deployment
+//! FPGA parameter export for [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl).
 //!
-//! Q8.8 fixed-point parameter export for FPGA deployment.
-//! Converts learned parameters to hardware-compatible format.
+//! Converts trained SNN floats to unsigned **Q8.8** (`u16`) vectors and writes
+//! Vivado `$readmemh` `.mem` files consumable by `WeightRam` and `NeuronParamRam`
+//! in the silicon-hdl core library.
+//!
+//! ## Traits
+//!
+//! Hardware-facing crates should depend on the traits here rather than the
+//! concrete [`FpgaParameterExporter`] type when possible:
+//!
+//! - [`FixedPointEncode`] — `f32` → Q8.8 `u16`
+//! - [`ParameterExport`] — produce [`FpgaParameters`]
+//! - [`MemFileWriter`] — write `.mem` + metadata JSON
 
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
 
-/// FPGA parameter exporter for Spikenaut-v2
+/// Metadata / layout tag for the Q8.8 `.mem` bundle shared with silicon-hdl.
 ///
-/// Exports learned SNN parameters in Q8.8 fixed-point format
-/// for FPGA deployment with <35µs/tick target performance.
+/// Historical name from the Spikenaut deployment pipeline; kept for downstream
+/// tooling that keys on this string.
+pub const EXPORT_FORMAT_VERSION: &str = "Spikenaut-v2";
+
+/// Encode host floating-point values as unsigned Q8.8 (`u16`).
+///
+/// Q8.8 maps `value × 256` into a 16-bit word. Values outside the representable
+/// range are clamped.
+pub trait FixedPointEncode {
+    /// Convert one `f32` to Q8.8 fixed-point.
+    fn encode_q88(&self, value: f32) -> u16;
+}
+
+/// Export SNN parameters as an FPGA-facing Q8.8 parameter bundle.
+///
+/// The resulting [`FpgaParameters`] align with silicon-hdl RAM contents
+/// (`WeightRam`, `NeuronParamRam`).
+pub trait ParameterExport {
+    /// Build the full Q8.8 parameter set and metadata.
+    fn export(&self) -> FpgaParameters;
+}
+
+/// Write Q8.8 parameter vectors as Vivado `$readmemh` `.mem` files.
+pub trait MemFileWriter {
+    /// Error type for filesystem / I/O failures.
+    type Error;
+
+    /// Write `parameters.mem`, `parameters_weights.mem`, `parameters_decay.mem`,
+    /// and `parameters.json` under `output_dir`.
+    fn write_mem_files(&self, output_dir: impl AsRef<Path>) -> Result<(), Self::Error>;
+}
+
+/// Default FPGA parameter exporter for the silicon-hdl Q8.8 layout.
+///
+/// Exports learned SNN parameters in Q8.8 fixed-point format for FPGA
+/// deployment with a &lt;35µs/tick target latency budget.
 pub struct FpgaParameterExporter {
     thresholds: Vec<f32>,
     weights: Vec<Vec<f32>>,
@@ -67,49 +111,43 @@ impl FpgaParameterExporter {
         self.decay_rates = decay_rates;
     }
 
-    /// Convert f32 to Q8.8 fixed-point format
+    /// Convert `f32` to Q8.8 fixed-point format.
+    ///
+    /// Prefer [`FixedPointEncode::encode_q88`] when coding against the trait.
     pub fn to_q88(&self, value: f32) -> u16 {
-        // Q8.8: 8 integer bits, 8 fractional bits
-        // Range: 0.0 to 255.996
-        let scaled = value * 256.0;
-        scaled.clamp(0.0, 65535.0) as u16
+        self.encode_q88(value)
     }
 
-    /// Export parameters to FPGA-compatible format
+    /// Export parameters to FPGA-compatible format.
+    ///
+    /// Prefer [`ParameterExport::export`] when coding against the trait.
     pub fn export(&self) -> FpgaParameters {
-        let thresholds_q88: Vec<u16> = self.thresholds.iter().map(|&v| self.to_q88(v)).collect();
+        ParameterExport::export(self)
+    }
 
-        let weights_q88: Vec<u16> = self
-            .weights
-            .iter()
-            .flat_map(|row| row.iter())
-            .map(|&v| self.to_q88(v))
-            .collect();
+    /// Export parameters to `.mem` files for silicon-hdl / Vivado `$readmemh`.
+    ///
+    /// Prefer [`MemFileWriter::write_mem_files`] when coding against the trait.
+    pub fn export_to_mem_files<P: AsRef<Path>>(
+        &self,
+        output_dir: P,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.write_mem_files(output_dir)
+    }
 
-        let decay_rates_q88: Vec<u16> = self.decay_rates.iter().map(|&v| self.to_q88(v)).collect();
-
-        let metadata = FpgaMetadata {
-            version: "Spikenaut-v2".to_string(),
-            timestamp: chrono::Utc::now().to_rfc3339(),
-            num_neurons: self.thresholds.len(),
-            num_channels: if self.weights.is_empty() {
-                0
-            } else {
-                self.weights[0].len()
-            },
-            target_latency_us: 35.0,
-            memory_usage_kb: self.calculate_memory_usage(),
-        };
-
-        FpgaParameters {
-            thresholds: thresholds_q88,
-            weights: weights_q88,
-            decay_rates: decay_rates_q88,
-            metadata,
+    /// Create an exporter pre-populated with given parameters.
+    pub fn from_params(
+        thresholds: Vec<f32>,
+        weights: Vec<Vec<f32>>,
+        decay_rates: Vec<f32>,
+    ) -> Self {
+        Self {
+            thresholds,
+            weights,
+            decay_rates,
         }
     }
 
-    /// Calculate memory usage in KB
     fn calculate_memory_usage(&self) -> f32 {
         let total_params = self.thresholds.len()
             + self.weights.iter().map(|row| row.len()).sum::<usize>()
@@ -117,37 +155,6 @@ impl FpgaParameterExporter {
 
         // Each parameter is 2 bytes (u16) in Q8.8 format
         (total_params * 2) as f32 / 1024.0
-    }
-
-    /// Export parameters to .mem files for FPGA
-    pub fn export_to_mem_files<P: AsRef<Path>>(
-        &self,
-        output_dir: P,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        fs::create_dir_all(&output_dir)?;
-
-        let params = self.export();
-
-        Self::write_mem_file(
-            output_dir.as_ref().join("parameters.mem"),
-            &params.thresholds,
-        )?;
-        Self::write_mem_file(
-            output_dir.as_ref().join("parameters_weights.mem"),
-            &params.weights,
-        )?;
-        Self::write_mem_file(
-            output_dir.as_ref().join("parameters_decay.mem"),
-            &params.decay_rates,
-        )?;
-
-        let metadata_path = output_dir.as_ref().join("parameters.json");
-        let metadata_json = serde_json::to_string_pretty(&params)?;
-        fs::write(metadata_path, metadata_json)?;
-
-        self.print_export_summary(&params, output_dir);
-
-        Ok(())
     }
 
     fn write_mem_file(
@@ -161,7 +168,6 @@ impl FpgaParameterExporter {
         Ok(())
     }
 
-    /// Print export summary
     fn print_export_summary<P: AsRef<Path>>(&self, params: &FpgaParameters, output_dir: P) {
         println!("=== FPGA Parameter Export Summary ===");
         println!("Output Directory: {}", output_dir.as_ref().display());
@@ -187,20 +193,90 @@ impl FpgaParameterExporter {
         );
         println!("  parameters.json        - metadata and configuration");
         println!();
-        println!("SUCCESS: FPGA parameters ready for deployment");
+        println!("SUCCESS: FPGA parameters ready for silicon-hdl deployment");
     }
+}
 
-    /// Create an exporter pre-populated with given parameters.
-    pub fn from_params(
-        thresholds: Vec<f32>,
-        weights: Vec<Vec<f32>>,
-        decay_rates: Vec<f32>,
-    ) -> Self {
-        Self {
-            thresholds,
-            weights,
-            decay_rates,
+impl FixedPointEncode for FpgaParameterExporter {
+    fn encode_q88(&self, value: f32) -> u16 {
+        // Q8.8: 8 integer bits, 8 fractional bits
+        // Range: 0.0 to 255.996 (clamped into u16)
+        let scaled = value * 256.0;
+        scaled.clamp(0.0, 65535.0) as u16
+    }
+}
+
+impl ParameterExport for FpgaParameterExporter {
+    fn export(&self) -> FpgaParameters {
+        let thresholds_q88: Vec<u16> = self
+            .thresholds
+            .iter()
+            .map(|&v| self.encode_q88(v))
+            .collect();
+
+        let weights_q88: Vec<u16> = self
+            .weights
+            .iter()
+            .flat_map(|row| row.iter())
+            .map(|&v| self.encode_q88(v))
+            .collect();
+
+        let decay_rates_q88: Vec<u16> = self
+            .decay_rates
+            .iter()
+            .map(|&v| self.encode_q88(v))
+            .collect();
+
+        let metadata = FpgaMetadata {
+            version: EXPORT_FORMAT_VERSION.to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            num_neurons: self.thresholds.len(),
+            num_channels: if self.weights.is_empty() {
+                0
+            } else {
+                self.weights[0].len()
+            },
+            target_latency_us: 35.0,
+            memory_usage_kb: self.calculate_memory_usage(),
+        };
+
+        FpgaParameters {
+            thresholds: thresholds_q88,
+            weights: weights_q88,
+            decay_rates: decay_rates_q88,
+            metadata,
         }
+    }
+}
+
+impl MemFileWriter for FpgaParameterExporter {
+    type Error = Box<dyn std::error::Error>;
+
+    fn write_mem_files(&self, output_dir: impl AsRef<Path>) -> Result<(), Self::Error> {
+        fs::create_dir_all(&output_dir)?;
+
+        let params = ParameterExport::export(self);
+
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters.mem"),
+            &params.thresholds,
+        )?;
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters_weights.mem"),
+            &params.weights,
+        )?;
+        Self::write_mem_file(
+            output_dir.as_ref().join("parameters_decay.mem"),
+            &params.decay_rates,
+        )?;
+
+        let metadata_path = output_dir.as_ref().join("parameters.json");
+        let metadata_json = serde_json::to_string_pretty(&params)?;
+        fs::write(metadata_path, metadata_json)?;
+
+        self.print_export_summary(&params, output_dir);
+
+        Ok(())
     }
 }
 
@@ -213,7 +289,7 @@ impl Default for FpgaParameterExporter {
 /// Helper function to format Q8.8 value as hex string
 pub fn format_q88_hex(value: f32) -> String {
     let exporter = FpgaParameterExporter::new();
-    let q88_value = exporter.to_q88(value);
+    let q88_value = exporter.encode_q88(value);
     format!("{:04X}", q88_value)
 }
 
@@ -286,5 +362,18 @@ mod tests {
 
         // Expected memory: (16 + 256 + 16) * 2 bytes = 576 bytes = 0.5625 KB
         assert!((params.metadata.memory_usage_kb - 0.5625).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_trait_surface() {
+        let exporter = FpgaParameterExporter::from_params(vec![1.0], vec![vec![0.5]], vec![0.9]);
+
+        // Trait methods (not only inherent methods) are the stable hardware surface.
+        assert_eq!(FixedPointEncode::encode_q88(&exporter, 1.0), 256);
+        let params = ParameterExport::export(&exporter);
+        assert_eq!(params.metadata.version, EXPORT_FORMAT_VERSION);
+        assert_eq!(params.thresholds, vec![256]);
+        assert_eq!(params.weights, vec![128]);
+        assert_eq!(params.decay_rates, vec![230]);
     }
 }
