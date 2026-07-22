@@ -69,7 +69,13 @@ Range: [0, 255.996]  (unsigned)
        [-128, 127.996]  (signed, two's complement)
 ```
 
-Directly loadable by `WeightRam.sv` and `NeuronParamRam.sv`.
+Directly loadable by silicon-hdl `WeightRam.sv` and `NeuronParamRam.sv`
+([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
+
+## Repo boundaries
+
+See [docs/boundary-matrix.md](docs/boundary-matrix.md) for what this crate owns
+versus `neuromod`, `brainstem-daemon`, `limbic-critic`, and `silicon-hdl`.
 
 ## Extracted from Production
 
@@ -81,8 +87,9 @@ training orchestrator so it works with any SNN framework.
 
 | Library | Purpose |
 |---------|---------|
-| [silicon-bridge-sv](https://github.com/Limen-Neural/silicon-bridge-sv) | FPGA bridge and protocol layer |
-| [silicon-distill-jl](https://github.com/Limen-Neural/silicon-distill-jl) | Julia training + distillation |
+| [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl) | SystemVerilog core, bridge, and SoC |
+| [neuromod](https://github.com/Limen-Neural/neuromod) | SNN dynamics / core runtime |
+| [SynapticDistill.jl](https://github.com/Limen-Neural/SynapticDistill.jl) | Julia training + distillation |
 
 ## License
 
