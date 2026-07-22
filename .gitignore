@@ -5,17 +5,19 @@ Cargo.lock
 
 # AI / agent tooling
 .kilo/
-.kilocode/
+.kilocode/state/
+.mimo/
 .mimocode/
-.opencode/
+.opencode/cache/
 .codex/
 .ai/
-.junie/
+.junie/state/
 .cursor/
 .cline/
 .swarm/
 .worktrees/
-.beads/
+.beads/*.db
+.beads/*.db-*
 
 # IDE
 .idea/
