@@ -27,7 +27,7 @@ back spike states at runtime.
 - `FpgaParameterExporter` — default implementation of those traits
 - `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
 - `FpgaBridge` — UART protocol for host–FPGA spike exchange (`uart` feature)
-- `FpgaMetrics` — Vivado timing report parser (WNS, TNS, LUT utilization) for CI/CD gating
+- `FpgaMetrics` — Vivado timing report parser (**WNS** for CI/CD gating; LUT field reserved / not parsed yet)
 
 ## Installation
 
@@ -73,6 +73,11 @@ Range: [0, 255.996]  (unsigned)
 
 Directly loadable by silicon-hdl `WeightRam.sv` and `NeuronParamRam.sv`
 ([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
+
+## Repo boundaries
+
+See [docs/boundary-matrix.md](docs/boundary-matrix.md) for what this crate owns
+versus `neuromod`, `brainstem-daemon`, `limbic-critic`, and `silicon-hdl`.
 
 ## Extracted from Production
 
