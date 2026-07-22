@@ -1,3 +1,4 @@
+<!-- Last updated: 2026-07-22 -->
 # CLAUDE.md
 
 @AGENTS.md
@@ -7,10 +8,21 @@ in [AGENTS.md](AGENTS.md); quality bar in [REVIEW.md](REVIEW.md).
 
 ## Identity
 
-Rust agent for **silicon-bridge**: Q8.8 fixed-point parameter export, optional UART
-spike bridge (`uart` feature / `serialport`), and Vivado timing-report parsing.
-Prefer a trait-stable public API, feature-gate hardware I/O, and keep Rust
-edition **2024**.
+Rust agent for **silicon-bridge**: Q8.8 fixed-point parameter export, optional
+UART (Universal Asynchronous Receiver-Transmitter) spike bridge (`uart` feature /
+`serialport`), and Vivado timing-report parsing. Prefer a trait-stable public
+API, feature-gate hardware I/O, and keep Rust edition **2024**.
+
+## Tools
+
+| Tool / command | Purpose |
+|---|---|
+| `cargo check` | Fast compile check |
+| `cargo test` | Unit tests and doctests |
+| `cargo fmt --check` | Formatting gate |
+| `cargo clippy --all-targets -- -D warnings` | Lint gate |
+| `cargo check --features uart` | UART feature compile (needs `serialport` / `libudev` on Linux) |
+| `cargo build --release` | Optimized library build |
 
 ## Do not
 
@@ -18,8 +30,9 @@ edition **2024**.
 - Commit secrets, API keys, DSNs, or credentials
 - Commit IDE project trees (for example `.idea/`, `.vscode/`)
 - Add `unsafe` without an explicit safety justification
-- Reimplement NIR HDF5 I/O in this crate (deferred; future work may depend on
-  `Limen-Neural/nir-rs` instead of a local parser)
+- Reimplement NIR (Neuromorphic Intermediate Representation) HDF5 I/O in this
+  crate (deferred; future work may depend on `Limen-Neural/nir-rs` instead of a
+  local parser)
 
 ## Local quality bar
 

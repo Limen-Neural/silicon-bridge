@@ -6,7 +6,6 @@ Cargo.lock
 # AI / agent tooling
 .kilo/
 .kilocode/state/
-.mimo/
 .mimocode/
 .opencode/cache/
 .codex/
