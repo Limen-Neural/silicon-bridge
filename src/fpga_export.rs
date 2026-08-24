@@ -26,8 +26,9 @@
 //! | Raw type | `u16` (unsigned — negatives are **not** representable) |
 //! | Width | 16 bits — 8 integer + 8 fractional |
 //! | Scaling | `raw = value × 256`, truncated toward zero |
-//! | Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) |
-//! | Raw range | `0..=65535` |
+//! | Encoder input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) |
+//! | Encoder raw output | `0..=65535` |
+//! | Decoder accepts | any `u16`: `0..=65535` → `0.0..=255.99609375` |
 //! | Serialized as | ASCII hex text, one `{:04X}` word per line for `$readmemh` |
 //! | Use it for | weights, thresholds, decay rates |
 //!

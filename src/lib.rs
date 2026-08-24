@@ -26,8 +26,9 @@
 //! | Raw type | `u16` (unsigned) | `i16` (two's complement) |
 //! | Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
 //! | Scaling | `raw = value × 256`, truncated toward zero | `raw = value × 256`, truncated toward zero |
-//! | Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
-//! | Raw range | `0..=65535` | `-32765..=32765` |
+//! | Encoder input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
+//! | Encoder raw output | `0..=65535` | `-32765..=32765` (saturates inside the `i16` limits) |
+//! | Decoder accepts | any `u16`: `0..=65535` → `0.0..=255.99609375` | any `i16`: `-32768..=32767` → `-128.0..=127.99609375` |
 //! | Serialized as | ASCII hex text, one `{:04X}` word per line (`$readmemh`) | raw binary, big-endian (MSB first) |
 //! | Consumed by | silicon-hdl `WeightRam` / `NeuronParamRam` | SiliconBridge v3.0 UART frame |
 //! | Use it for | weights, thresholds, decay rates | host stimuli, RX membrane potentials |
@@ -37,8 +38,10 @@
 //! - The export path **cannot represent negative values**; anything below `0.0`
 //!   clamps to raw `0`. Apply your own offset/bias convention before export if
 //!   trained weights can be negative.
-//! - The signed path saturates at raw `±32765` (`±127.99 × 256`, truncated), not
-//!   at the `i16` limits, so both ends of the range are symmetric.
+//! - The signed *encoder* saturates at raw `±32765` (`±127.99 × 256`, truncated),
+//!   inside the `i16` limits, so both ends of the TX range are symmetric. The
+//!   *decoder* is wider on purpose: an FPGA response of `0x8000` legitimately
+//!   decodes to `-128.0` and `0x7FFF` to `127.99609375`.
 //! - Both encoders truncate toward zero rather than rounding, and both map `NaN`
 //!   to raw `0`.
 //!

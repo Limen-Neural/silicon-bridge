@@ -76,14 +76,17 @@ baked into the bitstream are unsigned, host stimuli sent over UART are signed.
 | Raw type | `u16` (unsigned) | `i16` (two's complement) |
 | Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
 | Scaling | `raw = value × 256`, truncated toward zero | `raw = value × 256`, truncated toward zero |
-| Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
-| Raw range | `0..=65535` | `-32765..=32765` |
+| Encoder input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
+| Encoder raw output | `0..=65535` | `-32765..=32765` (saturates inside the `i16` limits) |
+| Decoder accepts | any `u16`: `0..=65535` → `0.0..=255.99609375` | any `i16`: `-32768..=32767` → `-128.0..=127.99609375` |
 | Serialized as | ASCII hex, one `{:04X}` word per line (`$readmemh`) | raw binary, big-endian (MSB first) |
 | Use it for | weights, thresholds, decay rates | host stimuli, RX membrane potentials |
 
 The export path **cannot represent negative values** — anything below `0.0`
 clamps to raw `0`, so apply your own offset/bias convention before exporting
 signed weights. Both encoders truncate toward zero and map `NaN` to raw `0`.
+The signed decoder is deliberately wider than its encoder: the FPGA may send any
+`i16`, so `0x8000` decodes to `-128.0` even though TX saturates at `±32765`.
 
 Exported `.mem` files are directly loadable by silicon-hdl `WeightRam.sv` and
 `NeuronParamRam.sv`

@@ -21,8 +21,9 @@
 //! | Decode with | [`q88_signed_to_f32`] | `q88_to_f32` |
 //! | Raw type | `i16` (two's complement) | `u16` (unsigned) |
 //! | Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
-//! | Input clamp | [`STIMULUS_Q88_MIN`]`..=`[`STIMULUS_Q88_MAX`] (`-127.99..=127.99`) | `0.0..=255.99609375` |
-//! | Raw range | `-32765..=32765` | `0..=65535` |
+//! | Encoder input clamp | [`STIMULUS_Q88_MIN`]`..=`[`STIMULUS_Q88_MAX`] (`-127.99..=127.99`) | `0.0..=255.99609375` |
+//! | Encoder raw output | `-32765..=32765` (TX saturation) | `0..=65535` |
+//! | Decoder accepts | any `i16`: `-32768..=32767` → `-128.0..=127.99609375` | any `u16`: `0..=65535` |
 //! | Byte order | raw binary, big-endian (MSB first) | ASCII hex, one `{:04X}` word per line |
 //! | Use it for | host stimuli, RX membrane potentials | weights, thresholds, decay rates |
 //!
@@ -68,8 +69,12 @@ pub fn encode_q88_signed(value: f32) -> i16 {
 
 /// Decode a **signed** Q8.8 (`i16`) wire word back to `f32`.
 ///
-/// Counterpart of [`encode_q88_signed`]. For `.mem` parameter words use the
-/// crate's unsigned `q88_to_f32` instead.
+/// Counterpart of [`encode_q88_signed`], but deliberately wider: every `i16` the
+/// FPGA can send is valid, so this covers `-32768..=32767`
+/// (`-128.0..=127.99609375`) — including the two words just outside what
+/// [`encode_q88_signed`] can produce (it saturates at `±32765`).
+///
+/// For `.mem` parameter words use the crate's unsigned `q88_to_f32` instead.
 pub fn q88_signed_to_f32(raw: i16) -> f32 {
     raw as f32 / 256.0
 }
@@ -109,7 +114,9 @@ impl FpgaBridge {
     ///
     /// Stimuli are encoded with [`encode_q88_signed`] (`i16`, clamped to
     /// [`STIMULUS_Q88_MIN`]`..=`[`STIMULUS_Q88_MAX`]) — **not** with the
-    /// unsigned `.mem` export encoder.
+    /// unsigned `.mem` export encoder. RX potentials are decoded with
+    /// [`q88_signed_to_f32`] over the full `i16` range, which is wider than what
+    /// the TX encoder can emit.
     ///
     /// Input is accepted as a dynamic slice; if fewer than 16 values are provided,
     /// remaining channels are zero-padded. If more are provided, only the first 16 are sent.
@@ -254,6 +261,17 @@ mod q88_signed_convention_tests {
                 "round trip failed for {value}"
             );
         }
+    }
+
+    #[test]
+    fn signed_decoder_covers_the_full_i16_wire_range() {
+        // The encoder saturates at +/-32765, but the FPGA may send any i16, so
+        // the decoder must accept the two words just outside that range.
+        assert_eq!(q88_signed_to_f32(i16::MIN), -128.0);
+        assert_eq!(q88_signed_to_f32(i16::MAX), 32767.0 / 256.0);
+        assert_eq!(q88_signed_to_f32(-32766), -32766.0 / 256.0);
+        assert!(encode_q88_signed(-128.0) > i16::MIN);
+        assert!(encode_q88_signed(f32::MAX) < i16::MAX);
     }
 
     #[test]
