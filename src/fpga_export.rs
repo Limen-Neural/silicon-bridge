@@ -376,4 +376,180 @@ mod tests {
         assert_eq!(params.weights, vec![128]);
         assert_eq!(params.decay_rates, vec![230]);
     }
+
+    /// Small, exactly-representable Q8.8 fixture used by the `.mem` writer tests.
+    ///
+    /// Every value is a multiple of 1/256, so Q8.8 encode/decode is lossless and
+    /// the expected hex words below can be asserted exactly.
+    fn mem_fixture() -> FpgaParameterExporter {
+        FpgaParameterExporter::from_params(
+            vec![1.0, 0.75],
+            vec![vec![0.5, 2.0], vec![0.25, 1.5]],
+            vec![0.5, 0.75],
+        )
+    }
+
+    /// Read a `.mem` file into its `$readmemh` lines.
+    fn read_hex_lines(path: impl AsRef<Path>) -> Vec<String> {
+        fs::read_to_string(path)
+            .expect("mem file should be readable")
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    /// Every `.mem` line must be an uppercase 4-digit hex word (`XXXX`).
+    fn assert_hex_line_format(lines: &[String]) {
+        for line in lines {
+            assert_eq!(line.len(), 4, "expected a 4-digit hex word, got {line:?}");
+            assert!(
+                line.chars()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_lowercase()),
+                "expected an uppercase 4-digit hex word, got {line:?}"
+            );
+        }
+    }
+
+    /// Re-parse `$readmemh` lines back into Q8.8 words.
+    fn parse_hex_lines(lines: &[String]) -> Vec<u16> {
+        lines
+            .iter()
+            .map(|line| u16::from_str_radix(line, 16).expect("mem line should be valid hex"))
+            .collect()
+    }
+
+    #[test]
+    fn test_write_mem_files_via_trait_emits_expected_files() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let exporter = mem_fixture();
+
+        // Trait method (not only the inherent one) is the stable hardware surface.
+        MemFileWriter::write_mem_files(&exporter, dir.path())
+            .expect("write_mem_files should succeed");
+
+        let mut names: Vec<String> = fs::read_dir(dir.path())
+            .expect("output dir should be readable")
+            .map(|entry| {
+                entry
+                    .expect("dir entry should be readable")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "parameters.json",
+                "parameters.mem",
+                "parameters_decay.mem",
+                "parameters_weights.mem",
+            ]
+        );
+
+        let thresholds = read_hex_lines(dir.path().join("parameters.mem"));
+        let weights = read_hex_lines(dir.path().join("parameters_weights.mem"));
+        let decay_rates = read_hex_lines(dir.path().join("parameters_decay.mem"));
+
+        assert_hex_line_format(&thresholds);
+        assert_hex_line_format(&weights);
+        assert_hex_line_format(&decay_rates);
+
+        // 1.0 -> 0x0100, 0.75 -> 0x00C0
+        assert_eq!(thresholds, ["0100", "00C0"]);
+        // Weights are flattened row-major: 0.5, 2.0, 0.25, 1.5
+        assert_eq!(weights, ["0080", "0200", "0040", "0180"]);
+        // 0.5 -> 0x0080, 0.75 -> 0x00C0
+        assert_eq!(decay_rates, ["0080", "00C0"]);
+    }
+
+    #[test]
+    fn test_mem_files_round_trip_to_parameter_export() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let exporter = mem_fixture();
+
+        MemFileWriter::write_mem_files(&exporter, dir.path())
+            .expect("write_mem_files should succeed");
+
+        let expected = ParameterExport::export(&exporter);
+
+        let thresholds = parse_hex_lines(&read_hex_lines(dir.path().join("parameters.mem")));
+        let weights = parse_hex_lines(&read_hex_lines(dir.path().join("parameters_weights.mem")));
+        let decay_rates = parse_hex_lines(&read_hex_lines(dir.path().join("parameters_decay.mem")));
+
+        assert_eq!(thresholds, expected.thresholds);
+        assert_eq!(weights, expected.weights);
+        assert_eq!(decay_rates, expected.decay_rates);
+
+        // The fixture is exactly representable, so Q8.8 decode returns the host floats.
+        let decoded: Vec<f32> = thresholds.iter().copied().map(q88_to_f32).collect();
+        for (got, want) in decoded.iter().zip([1.0_f32, 0.75]) {
+            assert!(
+                (got - want).abs() < 1e-6,
+                "Q8.8 round-trip drifted: got {got}, want {want}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_metadata_json_round_trips_to_fpga_parameters() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let exporter = mem_fixture();
+
+        MemFileWriter::write_mem_files(&exporter, dir.path())
+            .expect("write_mem_files should succeed");
+
+        let json = fs::read_to_string(dir.path().join("parameters.json"))
+            .expect("parameters.json should be readable");
+        let round_tripped: FpgaParameters =
+            serde_json::from_str(&json).expect("parameters.json should deserialize");
+
+        let expected = ParameterExport::export(&exporter);
+        assert_eq!(round_tripped.thresholds, expected.thresholds);
+        assert_eq!(round_tripped.weights, expected.weights);
+        assert_eq!(round_tripped.decay_rates, expected.decay_rates);
+
+        assert_eq!(round_tripped.metadata.version, EXPORT_FORMAT_VERSION);
+        assert_eq!(round_tripped.metadata.num_neurons, 2);
+        assert_eq!(round_tripped.metadata.num_channels, 2);
+        assert!(!round_tripped.metadata.timestamp.is_empty());
+        assert!((round_tripped.metadata.target_latency_us - 35.0).abs() < 1e-6);
+        // (2 thresholds + 4 weights + 2 decay rates) * 2 bytes = 16 bytes
+        assert!((round_tripped.metadata.memory_usage_kb - 16.0 / 1024.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_write_mem_files_creates_nested_dir_for_empty_params() {
+        let dir = tempfile::tempdir().expect("tempdir should be created");
+        let nested = dir.path().join("export").join("q88");
+        let exporter = FpgaParameterExporter::new();
+
+        MemFileWriter::write_mem_files(&exporter, &nested).expect("write_mem_files should succeed");
+
+        for name in [
+            "parameters.mem",
+            "parameters_weights.mem",
+            "parameters_decay.mem",
+            "parameters.json",
+        ] {
+            assert!(
+                nested.join(name).is_file(),
+                "{name} should have been written"
+            );
+        }
+
+        // No parameters means empty `.mem` files, not missing ones.
+        assert!(read_hex_lines(nested.join("parameters.mem")).is_empty());
+        assert!(read_hex_lines(nested.join("parameters_weights.mem")).is_empty());
+        assert!(read_hex_lines(nested.join("parameters_decay.mem")).is_empty());
+
+        let json = fs::read_to_string(nested.join("parameters.json"))
+            .expect("parameters.json should be readable");
+        let params: FpgaParameters =
+            serde_json::from_str(&json).expect("parameters.json should deserialize");
+        assert_eq!(params.metadata.num_neurons, 0);
+        assert_eq!(params.metadata.num_channels, 0);
+        assert!((params.metadata.memory_usage_kb - 0.0).abs() < 1e-6);
+    }
 }
