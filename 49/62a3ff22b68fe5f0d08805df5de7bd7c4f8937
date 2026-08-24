@@ -1,0 +1,21 @@
+src/fpga_metrics.rs
+  s_f3ea2336cb3cb7::t_9b3c1890ab1f40 166-167
+  s_f3ea2336cb3cb7::t_c52e69f986e8bb 82,162,175,193
+  s_f3ea2336cb3cb7::t_7a7fd68e2c078a 75-81,83-161,163-165,168-174,176-192,194-198
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4962a3ff22b68fe5f0d08805df5de7bd7c4f8937",
+  "prompts": {},
+  "sessions": {
+    "s_f3ea2336cb3cb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfb12617-30d3-417d-967c-b316d6d392e3",
+        "model": "claude-opus-5"
+      },
+      "human_author": null
+    }
+  }
+}
