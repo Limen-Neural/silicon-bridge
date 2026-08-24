@@ -100,6 +100,13 @@ let metrics = FpgaMetrics::load_from_path("Basys3_Top_timing_summary_routed.rpt"
 assert!(metrics.wns_ns >= 0.0, "timing violation: WNS {} ns", metrics.wns_ns);
 ```
 
+`parse_from_report` expects the numeric data row to be the first non-empty line
+after the `WNS(ns)` header. It does **not** skip the dashed separator row that a
+stock Vivado timing summary prints between the header and the data, so that row
+has to be stripped before the report is handed to the parser; otherwise the load
+returns `None` and the gate above fails closed. Hardening the parser is tracked
+alongside #21.
+
 WNS is the only value actually parsed. Not implemented yet:
 
 - **TNS** — there is no `tns_ns` field and no TNS parser
