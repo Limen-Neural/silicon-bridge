@@ -16,7 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `FpgaMetrics::tns_ns` field plus `parse_tns_from_report`, `parse_lut_utilization`,
   and `load_from_reports` — TNS from the timing summary data row and LUT
   utilization from `report_utilization` output. Absent values degrade to `0.0`
-  instead of failing the parse (#21).
+  instead of failing the parse, and `tns_ns` is `#[serde(default)]` so metrics
+  serialized before it existed still deserialize (#21).
+  New public field: code outside the crate that builds `FpgaMetrics` with a
+  struct literal must add `tns_ns` (or `..Default::default()`). Serialized
+  payloads and field-access code are unaffected.
 
 ### Fixed
 

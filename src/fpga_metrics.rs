@@ -34,6 +34,10 @@ pub struct FpgaMetrics {
     pub wns_ns: f32,
     /// Total Negative Slack in nanoseconds, summed over all failing endpoints.
     /// `0.0` when timing is met — and also when the report has no TNS column.
+    ///
+    /// `#[serde(default)]` so metrics serialized before this field existed
+    /// still deserialize.
+    #[serde(default)]
     pub tns_ns: f32,
     /// LUT resource utilization (0.0–1.0).
     /// `0.0` when no utilization report was available.
@@ -61,15 +65,18 @@ impl FpgaMetrics {
     /// assert_eq!(FpgaMetrics::parse_from_report(report), Some(2.345));
     /// ```
     pub fn parse_from_report(report_text: &str) -> Option<f32> {
-        Self::parse_timing_column(report_text, 0)
+        let (_header, data_row) = timing_summary_rows(report_text)?;
+        data_row.split_whitespace().next()?.parse::<f32>().ok()
     }
 
     /// Parse the TNS from a Vivado timing summary report text.
     ///
     /// TNS is the second column of the same data row as WNS
-    /// (`WNS(ns)  TNS(ns)  ...`). Returns `None` when the report has no such
-    /// column, which callers should treat as "not reported" rather than as a
-    /// failure.
+    /// (`WNS(ns)  TNS(ns)  ...`), read only after confirming the second header
+    /// column really is `TNS(ns)` — a report whose second column is something
+    /// else (`WHS(ns)`, an endpoint count) yields `None` rather than a
+    /// fabricated value. Returns `None` when the report has no such column,
+    /// which callers should treat as "not reported" rather than as a failure.
     ///
     /// ```
     /// use silicon_bridge::FpgaMetrics;
@@ -82,7 +89,13 @@ impl FpgaMetrics {
     /// assert_eq!(FpgaMetrics::parse_tns_from_report(report), Some(-1.882));
     /// ```
     pub fn parse_tns_from_report(report_text: &str) -> Option<f32> {
-        Self::parse_timing_column(report_text, 1)
+        let (header, data_row) = timing_summary_rows(report_text)?;
+        // `WNS(ns)` and `TNS(ns)` are single-token headers, so the second
+        // whitespace token names the column this reads.
+        if header.split_whitespace().nth(1)? != "TNS(ns)" {
+            return None;
+        }
+        data_row.split_whitespace().nth(1)?.parse::<f32>().ok()
     }
 
     /// Parse LUT utilization (0.0–1.0) from a Vivado **utilization** report.
@@ -93,7 +106,8 @@ impl FpgaMetrics {
     /// cell of the `Slice LUTs` row of the *Slice Logic* table (`CLB LUTs` on
     /// UltraScale devices), converted from percent to a fraction. Nested rows
     /// such as `LUT as Logic` are ignored. Returns `None` when the text has no
-    /// such row.
+    /// such row, or when its `Util%` cell is blank or outside 0–100 — the
+    /// column is never shifted to a neighboring cell to produce a value.
     ///
     /// ```
     /// use silicon_bridge::FpgaMetrics;
@@ -111,11 +125,14 @@ impl FpgaMetrics {
             if !trimmed.starts_with('|') {
                 continue;
             }
-            let mut cells = trimmed
+            // Strip the border pipes, then keep every cell — including empty
+            // ones — so a blank cell cannot shift the `Util%` column.
+            let cells: Vec<&str> = trimmed
+                .trim_matches('|')
                 .split('|')
                 .map(str::trim)
-                .filter(|cell| !cell.is_empty());
-            let Some(site_type) = cells.next() else {
+                .collect();
+            let Some((site_type, data_cells)) = cells.split_first() else {
                 continue;
             };
             // Vivado marks rows influenced by fixed cells with a trailing `*`.
@@ -125,15 +142,15 @@ impl FpgaMetrics {
             {
                 continue;
             }
-            // `Util%` is the last populated cell; the column count varies by
-            // Vivado version (some emit an extra `Prohibited` column).
-            let Some(util_percent) = cells.next_back() else {
+            // `Util%` is the last cell; the column count varies by Vivado
+            // version (some emit an extra `Prohibited` column).
+            let Some(util_percent) = data_cells.last() else {
                 continue;
             };
             let Ok(percent) = util_percent.parse::<f32>() else {
                 continue;
             };
-            if percent.is_finite() && percent >= 0.0 {
+            if (0.0..=100.0).contains(&percent) {
                 return Some(percent / 100.0);
             }
         }
@@ -191,33 +208,26 @@ impl FpgaMetrics {
             synthesis_ok: true,
         })
     }
-
-    /// Parse the `index`-th whitespace-separated column of the timing summary
-    /// data row (0 = WNS, 1 = TNS).
-    fn parse_timing_column(report_text: &str, index: usize) -> Option<f32> {
-        let data_row = timing_summary_data_row(report_text)?;
-        data_row.split_whitespace().nth(index)?.parse::<f32>().ok()
-    }
 }
 
-/// Locate the data row of a Vivado timing summary.
+/// Locate the header and data rows of a Vivado timing summary, both trimmed.
 ///
-/// Scans for the `WNS(ns)` column header, then returns the first line beneath
-/// it that is neither blank nor a column rule.
-fn timing_summary_data_row(report_text: &str) -> Option<&str> {
-    let mut found_header = false;
+/// Scans for the `WNS(ns)` column header, then pairs it with the first line
+/// beneath it that is neither blank nor a column rule.
+fn timing_summary_rows(report_text: &str) -> Option<(&str, &str)> {
+    let mut header = None;
     for line in report_text.lines() {
         let trimmed = line.trim();
-        if !found_header {
+        let Some(header) = header else {
             if trimmed.starts_with("WNS(ns)") {
-                found_header = true;
+                header = Some(trimmed);
             }
             continue;
-        }
+        };
         if trimmed.is_empty() || is_column_rule(trimmed) {
             continue;
         }
-        return Some(trimmed);
+        return Some((header, trimmed));
     }
     None
 }
@@ -327,6 +337,17 @@ Design Timing Summary
     }
 
     #[test]
+    fn second_column_that_is_not_tns_is_not_read_as_tns() {
+        // A variant summary whose second column is hold slack, not TNS.
+        let report = "    WNS(ns)      WHS(ns)\n      2.345        0.123\n";
+        assert_close(
+            FpgaMetrics::parse_from_report(report).expect("WNS not parsed"),
+            2.345,
+        );
+        assert!(FpgaMetrics::parse_tns_from_report(report).is_none());
+    }
+
+    #[test]
     fn tns_without_header_returns_none() {
         assert!(FpgaMetrics::parse_tns_from_report("      2.345       -1.882\n").is_none());
         assert!(FpgaMetrics::parse_tns_from_report("").is_none());
@@ -384,6 +405,19 @@ Design Timing Summary
     #[test]
     fn non_numeric_lut_percentage_returns_none() {
         let report = "| Slice LUTs | 3182 | 0 | 20800 | n/a |\n";
+        assert!(FpgaMetrics::parse_lut_utilization(report).is_none());
+    }
+
+    #[test]
+    fn blank_lut_percentage_cell_does_not_shift_columns() {
+        // The `Available` count must not be read as `Util%`.
+        let report = "| Slice LUTs | 3182 | 0 | 20800 |   |\n";
+        assert!(FpgaMetrics::parse_lut_utilization(report).is_none());
+    }
+
+    #[test]
+    fn out_of_range_lut_percentage_returns_none() {
+        let report = "| Slice LUTs | 3182 | 0 | 20800 | 20800 |\n";
         assert!(FpgaMetrics::parse_lut_utilization(report).is_none());
     }
 
@@ -457,6 +491,17 @@ Design Timing Summary
         let decoded: FpgaMetrics = serde_json::from_str(&json).expect("deserialize");
         assert_close(decoded.wns_ns, 2.345);
         assert_close(decoded.tns_ns, -1.882);
+        assert_close(decoded.lut_utilization, 0.153);
+        assert!(decoded.synthesis_ok);
+    }
+
+    #[test]
+    fn legacy_json_without_tns_still_deserializes() {
+        // Payloads serialized before `tns_ns` existed must keep loading.
+        let legacy = r#"{"wns_ns":2.345,"lut_utilization":0.153,"synthesis_ok":true}"#;
+        let decoded: FpgaMetrics = serde_json::from_str(legacy).expect("legacy payload rejected");
+        assert_close(decoded.wns_ns, 2.345);
+        assert_close(decoded.tns_ns, 0.0);
         assert_close(decoded.lut_utilization, 0.153);
         assert!(decoded.synthesis_ok);
     }
