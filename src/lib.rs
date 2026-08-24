@@ -12,6 +12,36 @@
 //!
 //! Licensed under either of MIT or Apache-2.0 at your option.
 //!
+//! ## Q8.8 conventions
+//!
+//! Q8.8 always means "value × 256 packed into a 16-bit word", but this crate
+//! carries **two different signedness conventions** and they are not
+//! interchangeable. Parameters baked into the bitstream are unsigned; host
+//! stimuli pushed over UART are signed two's complement.
+//!
+//! | Aspect | Parameter export (`.mem`) | Host stimuli (UART TX/RX) |
+//! |---|---|---|
+//! | Encode with | [`FixedPointEncode::encode_q88`] / [`encode_q88_unsigned`] | `encode_q88_signed` (`uart` feature) |
+//! | Decode with | [`q88_to_f32`] | `q88_signed_to_f32` (`uart` feature) |
+//! | Raw type | `u16` (unsigned) | `i16` (two's complement) |
+//! | Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
+//! | Scaling | `raw = value × 256`, truncated toward zero | `raw = value × 256`, truncated toward zero |
+//! | Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
+//! | Raw range | `0..=65535` | `-32765..=32765` |
+//! | Serialized as | ASCII hex text, one `{:04X}` word per line (`$readmemh`) | raw binary, big-endian (MSB first) |
+//! | Consumed by | silicon-hdl `WeightRam` / `NeuronParamRam` | SiliconBridge v3.0 UART frame |
+//! | Use it for | weights, thresholds, decay rates | host stimuli, RX membrane potentials |
+//!
+//! Consequences worth remembering:
+//!
+//! - The export path **cannot represent negative values**; anything below `0.0`
+//!   clamps to raw `0`. Apply your own offset/bias convention before export if
+//!   trained weights can be negative.
+//! - The signed path saturates at raw `±32765` (`±127.99 × 256`, truncated), not
+//!   at the `i16` limits, so both ends of the range are symmetric.
+//! - Both encoders truncate toward zero rather than rounding, and both map `NaN`
+//!   to raw `0`.
+//!
 //! ## Provenance
 //!
 //! Extracted from Eagle-Lander, the author's own private neuromorphic GPU supervisor
@@ -48,10 +78,13 @@ mod fpga_bridge;
 // Re-export public API
 pub use fpga_export::{
     EXPORT_FORMAT_VERSION, FixedPointEncode, FpgaMetadata, FpgaParameterExporter, FpgaParameters,
-    MemFileWriter, ParameterExport, format_q88_hex, q88_to_f32,
+    MemFileWriter, ParameterExport, encode_q88_unsigned, format_q88_hex, q88_to_f32,
 };
 
 pub use fpga_metrics::FpgaMetrics;
 
 #[cfg(feature = "uart")]
-pub use fpga_bridge::{FpgaBridge, find_fpga_ports};
+pub use fpga_bridge::{
+    FpgaBridge, STIMULUS_Q88_MAX, STIMULUS_Q88_MIN, encode_q88_signed, find_fpga_ports,
+    q88_signed_to_f32,
+};

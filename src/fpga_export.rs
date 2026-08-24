@@ -13,6 +13,26 @@
 //! - [`FixedPointEncode`] — `f32` → Q8.8 `u16`
 //! - [`ParameterExport`] — produce [`FpgaParameters`]
 //! - [`MemFileWriter`] — write `.mem` + metadata JSON
+//!
+//! ## Q8.8 convention used here: unsigned
+//!
+//! Everything in this module encodes **unsigned** Q8.8. The UART bridge
+//! (`fpga_bridge`, `uart` feature) uses a *different*, signed convention for
+//! host stimuli; see the "Q8.8 conventions" table in the crate root docs for the
+//! full side-by-side comparison.
+//!
+//! | Aspect | This module (`.mem` export) |
+//! |---|---|
+//! | Raw type | `u16` (unsigned — negatives are **not** representable) |
+//! | Width | 16 bits — 8 integer + 8 fractional |
+//! | Scaling | `raw = value × 256`, truncated toward zero |
+//! | Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) |
+//! | Raw range | `0..=65535` |
+//! | Serialized as | ASCII hex text, one `{:04X}` word per line for `$readmemh` |
+//! | Use it for | weights, thresholds, decay rates |
+//!
+//! Use [`encode_q88_unsigned`] (or [`FixedPointEncode::encode_q88`]) for
+//! parameters, and `encode_q88_signed` from the `uart` feature for host stimuli.
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -29,8 +49,16 @@ pub const EXPORT_FORMAT_VERSION: &str = "Spikenaut-v2";
 ///
 /// Q8.8 maps `value × 256` into a 16-bit word. Values outside the representable
 /// range are clamped.
+///
+/// This is the **unsigned** convention (`0.0..=255.99609375`, raw `0..=65535`)
+/// used for `.mem` parameter export. Host stimuli sent over UART use the signed
+/// `i16` convention instead (`encode_q88_signed`, `uart` feature) — see the
+/// "Q8.8 conventions" table in the crate root docs.
 pub trait FixedPointEncode {
-    /// Convert one `f32` to Q8.8 fixed-point.
+    /// Convert one `f32` to unsigned Q8.8 fixed-point.
+    ///
+    /// Negative inputs clamp to `0`; inputs above `255.99609375` clamp to
+    /// `65535`; `NaN` encodes as `0`.
     fn encode_q88(&self, value: f32) -> u16;
 }
 
@@ -199,10 +227,11 @@ impl FpgaParameterExporter {
 
 impl FixedPointEncode for FpgaParameterExporter {
     fn encode_q88(&self, value: f32) -> u16 {
-        // Q8.8: 8 integer bits, 8 fractional bits
-        // Range: 0.0 to 255.996 (clamped into u16)
-        let scaled = value * 256.0;
-        scaled.clamp(0.0, 65535.0) as u16
+        // ENCODE SITE (unsigned Q8.8) — this is the `.mem` / synthesis path.
+        // Q8.8: 8 integer bits, 8 fractional bits, range 0.0..=255.99609375.
+        // Negative values are NOT representable here and clamp to 0; the signed
+        // `i16` convention lives in `fpga_bridge::encode_q88_signed` (`uart`).
+        encode_q88_unsigned(value)
     }
 }
 
@@ -286,6 +315,32 @@ impl Default for FpgaParameterExporter {
     }
 }
 
+/// Encode an `f32` as **unsigned** Q8.8 (`u16`) without needing an exporter.
+///
+/// This is the single source of truth for the export-path encoding used by
+/// [`FixedPointEncode::encode_q88`], `.mem` files, and [`format_q88_hex`]:
+/// `raw = value × 256`, truncated toward zero, with the scaled result clamped
+/// into `0..=65535`.
+///
+/// Host stimuli sent over UART must **not** use this function — they use the
+/// signed `i16` convention (`encode_q88_signed`, `uart` feature). See the
+/// "Q8.8 conventions" table in the crate root docs.
+///
+/// ```rust
+/// use silicon_bridge::{encode_q88_unsigned, q88_to_f32};
+///
+/// assert_eq!(encode_q88_unsigned(1.0), 256);
+/// assert_eq!(encode_q88_unsigned(-1.0), 0); // no negatives on the export path
+/// assert_eq!(encode_q88_unsigned(1000.0), 65535); // saturates
+/// assert_eq!(q88_to_f32(encode_q88_unsigned(0.5)), 0.5);
+/// ```
+pub fn encode_q88_unsigned(value: f32) -> u16 {
+    // ENCODE SITE (unsigned Q8.8) — clamp happens on the *scaled* value, so the
+    // representable input range is 0.0..=255.99609375 (65535 / 256).
+    let scaled = value * 256.0;
+    scaled.clamp(0.0, 65535.0) as u16
+}
+
 /// Helper function to format Q8.8 value as hex string
 pub fn format_q88_hex(value: f32) -> String {
     let exporter = FpgaParameterExporter::new();
@@ -293,7 +348,11 @@ pub fn format_q88_hex(value: f32) -> String {
     format!("{:04X}", q88_value)
 }
 
-/// Helper function to convert Q8.8 back to f32
+/// Helper function to convert **unsigned** Q8.8 back to f32.
+///
+/// Counterpart of [`encode_q88_unsigned`]. For the signed UART path use
+/// `q88_signed_to_f32` (`uart` feature) instead — decoding a signed raw word
+/// with this function reads negatives as large positives.
 pub fn q88_to_f32(q88_value: u16) -> f32 {
     q88_value as f32 / 256.0
 }
@@ -375,5 +434,98 @@ mod tests {
         assert_eq!(params.thresholds, vec![256]);
         assert_eq!(params.weights, vec![128]);
         assert_eq!(params.decay_rates, vec![230]);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Q8.8 convention tests (unsigned export path). The signed UART counterpart
+// lives in `fpga_bridge` behind the `uart` feature; see the "Q8.8 conventions"
+// table in the crate root docs.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod q88_unsigned_convention_tests {
+    use super::*;
+
+    /// Largest input the unsigned export path can represent: 65535 / 256.
+    const MAX_UNSIGNED_INPUT: f32 = 65535.0 / 256.0; // 255.99609375
+
+    #[test]
+    fn unsigned_encode_scales_by_256() {
+        assert_eq!(encode_q88_unsigned(0.0), 0);
+        assert_eq!(encode_q88_unsigned(1.0), 256);
+        assert_eq!(encode_q88_unsigned(0.5), 128);
+        assert_eq!(encode_q88_unsigned(1.0 / 256.0), 1); // one LSB
+        assert_eq!(encode_q88_unsigned(255.0), 65280);
+    }
+
+    #[test]
+    fn unsigned_encode_truncates_toward_zero() {
+        // 0.999 x 256 = 255.744 -> 255 (truncated, not rounded up to 256)
+        assert_eq!(encode_q88_unsigned(0.999), 255);
+        assert_eq!(encode_q88_unsigned(1.9999), 511);
+    }
+
+    #[test]
+    fn unsigned_encode_clamps_at_both_ends() {
+        // Upper boundary: 65535 / 256 is the largest representable input.
+        assert_eq!(encode_q88_unsigned(MAX_UNSIGNED_INPUT), 65535);
+        assert_eq!(encode_q88_unsigned(256.0), 65535);
+        assert_eq!(encode_q88_unsigned(1.0e6), 65535);
+        assert_eq!(encode_q88_unsigned(f32::MAX), 65535);
+        assert_eq!(encode_q88_unsigned(f32::INFINITY), 65535);
+
+        // Lower boundary: the export path cannot represent negatives at all.
+        assert_eq!(encode_q88_unsigned(0.0), 0);
+        assert_eq!(encode_q88_unsigned(-1.0 / 256.0), 0);
+        assert_eq!(encode_q88_unsigned(-1.0), 0);
+        assert_eq!(encode_q88_unsigned(-127.99), 0);
+        assert_eq!(encode_q88_unsigned(f32::MIN), 0);
+        assert_eq!(encode_q88_unsigned(f32::NEG_INFINITY), 0);
+    }
+
+    #[test]
+    fn unsigned_encode_maps_nan_to_zero() {
+        assert_eq!(encode_q88_unsigned(f32::NAN), 0);
+    }
+
+    #[test]
+    fn unsigned_encode_round_trips_through_q88_to_f32() {
+        for value in [0.0_f32, 0.00390625, 0.5, 1.0, 12.25, MAX_UNSIGNED_INPUT] {
+            let raw = encode_q88_unsigned(value);
+            assert_eq!(q88_to_f32(raw), value, "round trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn trait_and_inherent_encoders_match_the_free_function() {
+        let exporter = FpgaParameterExporter::new();
+        for value in [-5.0_f32, 0.0, 0.3, 1.0, 255.0, 300.0] {
+            let expected = encode_q88_unsigned(value);
+            assert_eq!(FixedPointEncode::encode_q88(&exporter, value), expected);
+            assert_eq!(exporter.to_q88(value), expected);
+        }
+    }
+
+    #[test]
+    fn mem_words_are_four_hex_digits_msb_first() {
+        // `.mem` files carry ASCII hex, one 4-digit word per line for $readmemh.
+        assert_eq!(format_q88_hex(0.0), "0000");
+        assert_eq!(format_q88_hex(1.0), "0100");
+        assert_eq!(format_q88_hex(MAX_UNSIGNED_INPUT), "FFFF");
+        assert_eq!(format_q88_hex(-1.0), "0000"); // clamped, not two's complement
+    }
+
+    #[test]
+    fn exported_vectors_clamp_out_of_range_parameters() {
+        let exporter = FpgaParameterExporter::from_params(
+            vec![-1.0, 300.0],
+            vec![vec![-0.5, 1.0]],
+            vec![0.0, MAX_UNSIGNED_INPUT],
+        );
+        let params = ParameterExport::export(&exporter);
+
+        assert_eq!(params.thresholds, vec![0, 65535]);
+        assert_eq!(params.weights, vec![0, 256]);
+        assert_eq!(params.decay_rates, vec![0, 65535]);
     }
 }

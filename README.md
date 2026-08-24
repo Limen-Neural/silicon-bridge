@@ -25,7 +25,8 @@ back spike states at runtime.
   - `ParameterExport` — build the FPGA parameter bundle
   - `MemFileWriter` — write `$readmemh` `.mem` files
 - `FpgaParameterExporter` — default implementation of those traits
-- `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
+- `format_q88_hex` / `q88_to_f32` / `encode_q88_unsigned` — unsigned Q8.8 helpers
+- `encode_q88_signed` / `q88_signed_to_f32` — signed Q8.8 stimulus helpers (`uart` feature)
 - `FpgaBridge` — UART protocol for host–FPGA spike exchange (`uart` feature)
 - `FpgaMetrics` — Vivado timing report parser (**WNS** for CI/CD gating; LUT field reserved / not parsed yet)
 
@@ -64,14 +65,28 @@ let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 
 ## Q8.8 Fixed-Point Format
 
-```
-Q8.8:  value = raw_u16 / 256.0
-       raw   = clamp(value × 256, 0, 65535) truncated to u16
-Range: [0, 255.996]  (unsigned)
-       [-128, 127.996]  (signed, two's complement)
-```
+Q8.8 always means "value × 256 packed into a 16-bit word", but the crate carries
+**two signedness conventions** and they are not interchangeable: parameters
+baked into the bitstream are unsigned, host stimuli sent over UART are signed.
 
-Directly loadable by silicon-hdl `WeightRam.sv` and `NeuronParamRam.sv`
+| Aspect | Parameter export (`.mem`) | Host stimuli (UART TX/RX) |
+|---|---|---|
+| Encode with | `FixedPointEncode::encode_q88` / `encode_q88_unsigned` | `encode_q88_signed` (`uart` feature) |
+| Decode with | `q88_to_f32` | `q88_signed_to_f32` (`uart` feature) |
+| Raw type | `u16` (unsigned) | `i16` (two's complement) |
+| Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
+| Scaling | `raw = value × 256`, truncated toward zero | `raw = value × 256`, truncated toward zero |
+| Input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
+| Raw range | `0..=65535` | `-32765..=32765` |
+| Serialized as | ASCII hex, one `{:04X}` word per line (`$readmemh`) | raw binary, big-endian (MSB first) |
+| Use it for | weights, thresholds, decay rates | host stimuli, RX membrane potentials |
+
+The export path **cannot represent negative values** — anything below `0.0`
+clamps to raw `0`, so apply your own offset/bias convention before exporting
+signed weights. Both encoders truncate toward zero and map `NaN` to raw `0`.
+
+Exported `.mem` files are directly loadable by silicon-hdl `WeightRam.sv` and
+`NeuronParamRam.sv`
 ([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
 
 ## Repo boundaries
