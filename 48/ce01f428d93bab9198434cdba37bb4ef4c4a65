@@ -1,0 +1,25 @@
+src/lib.rs
+  s_f3ea2336cb3cb7::t_0389400927a223 29-31,41-44
+src/fpga_bridge.rs
+  s_f3ea2336cb3cb7::t_0389400927a223 24-26,72-77,117-119,266-274
+src/fpga_export.rs
+  s_f3ea2336cb3cb7::t_0389400927a223 29-31
+README.md
+  s_f3ea2336cb3cb7::t_0389400927a223 79-81,88-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "48ce01f428d93bab9198434cdba37bb4ef4c4a65",
+  "prompts": {},
+  "sessions": {
+    "s_f3ea2336cb3cb7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfb12617-30d3-417d-967c-b316d6d392e3",
+        "model": "claude-opus-5"
+      },
+      "human_author": "Raul Montoya Cardenas <montoyaraul34@gmail.com>"
+    }
+  }
+}
