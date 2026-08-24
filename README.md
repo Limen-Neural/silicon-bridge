@@ -94,9 +94,10 @@ Vivado timing summary report so CI can gate on a timing violation:
 ```rust
 use silicon_bridge::FpgaMetrics;
 
-if let Some(metrics) = FpgaMetrics::load_from_path("Basys3_Top_timing_summary_routed.rpt") {
-    assert!(metrics.wns_ns >= 0.0, "timing violation");
-}
+// Fail closed: a missing or unparseable report must not let the gate pass.
+let metrics = FpgaMetrics::load_from_path("Basys3_Top_timing_summary_routed.rpt")
+    .expect("timing report missing or unrecognized");
+assert!(metrics.wns_ns >= 0.0, "timing violation: WNS {} ns", metrics.wns_ns);
 ```
 
 WNS is the only value actually parsed. Not implemented yet:
