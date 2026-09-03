@@ -25,11 +25,12 @@ impl FpgaMetrics {
     /// Parse the WNS from a Vivado timing summary report text.
     ///
     /// Looks for the `WNS(ns)` column header row and extracts the first value.
+    /// Blank lines and dashed column-rule rows after the header are skipped.
     /// Returns `None` if the file format is not recognized.
     pub fn parse_from_report(report_text: &str) -> Option<f32> {
         // The Vivado timing summary has a line like:
         // "  WNS(ns)      TNS(ns)  ..."
-        // followed by a data row with the actual values.
+        // followed by a dashed rule, then a data row with the actual values.
         let mut found_header = false;
         for line in report_text.lines() {
             let trimmed = line.trim();
@@ -38,8 +39,12 @@ impl FpgaMetrics {
                 continue;
             }
             if found_header && !trimmed.is_empty() {
-                // First token of the data row is WNS
+                // First token of the data row is WNS. Skip dashed separator rows
+                // (e.g. "-------      -------") that Vivado prints under headers.
                 if let Some(wns_str) = trimmed.split_whitespace().next() {
+                    if !wns_str.is_empty() && wns_str.bytes().all(|b| b == b'-') {
+                        continue;
+                    }
                     return wns_str.parse::<f32>().ok();
                 }
                 break;
@@ -78,8 +83,8 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    /// Timing-summary excerpt in the shape Vivado emits, minus the column-rule
-    /// row (see `separator_row_is_not_skipped`).
+    /// Timing-summary excerpt in the shape Vivado emits (header plus data row).
+    /// The dashed column-rule case is covered by `skips_dashed_separator_row`.
     const TIMING_SUMMARY: &str = "\
 ------------------------------------------------------------------
 | Tool Version : Vivado v2022.2 (64-bit)
@@ -157,15 +162,14 @@ Design Timing Summary
         assert!(FpgaMetrics::parse_from_report(report).is_none());
     }
 
-    /// Vivado prints a rule of dashes under the column headers. The parser
-    /// treats it as the data row, so a verbatim report currently yields `None`.
-    /// This pins today's behavior; loosen it when the parser learns to skip
-    /// separator rows.
+    /// Vivado prints a dashed rule under the column headers. That row must be
+    /// skipped so the following numeric data row supplies WNS.
     #[test]
-    fn separator_row_is_not_skipped() {
+    fn skips_dashed_separator_row() {
         let report =
             "    WNS(ns)      TNS(ns)\n    -------      -------\n      2.345        0.000\n";
-        assert!(FpgaMetrics::parse_from_report(report).is_none());
+        let wns = FpgaMetrics::parse_from_report(report).expect("separator row blocked WNS parse");
+        assert_close(wns, 2.345);
     }
 
     #[test]
