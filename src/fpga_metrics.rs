@@ -42,7 +42,7 @@ impl FpgaMetrics {
                 // First token of the data row is WNS. Skip dashed separator rows
                 // (e.g. "-------      -------") that Vivado prints under headers.
                 if let Some(wns_str) = trimmed.split_whitespace().next() {
-                    if !wns_str.is_empty() && wns_str.bytes().all(|b| b == b'-') {
+                    if wns_str.bytes().all(|b| b == b'-') {
                         continue;
                     }
                     return wns_str.parse::<f32>().ok();
@@ -83,8 +83,8 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    /// Timing-summary excerpt in the shape Vivado emits (header plus data row).
-    /// The dashed column-rule case is covered by `skips_dashed_separator_row`.
+    /// Full Vivado timing-summary shape: header, dashed column-rule, then data.
+    /// `skips_dashed_separator_row` remains the focused unit case for the skip.
     const TIMING_SUMMARY: &str = "\
 ------------------------------------------------------------------
 | Tool Version : Vivado v2022.2 (64-bit)
@@ -95,6 +95,7 @@ Design Timing Summary
 ---------------------
 
     WNS(ns)      TNS(ns)  TNS Failing Endpoints  TNS Total Endpoints
+    -------      -------  ---------------------  -------------------
       2.345        0.000                      0                 1234
 ";
 
@@ -170,6 +171,12 @@ Design Timing Summary
             "    WNS(ns)      TNS(ns)\n    -------      -------\n      2.345        0.000\n";
         let wns = FpgaMetrics::parse_from_report(report).expect("separator row blocked WNS parse");
         assert_close(wns, 2.345);
+    }
+
+    #[test]
+    fn separator_row_then_eof_returns_none() {
+        let report = "    WNS(ns)      TNS(ns)\n    -------      -------\n";
+        assert!(FpgaMetrics::parse_from_report(report).is_none());
     }
 
     #[test]
