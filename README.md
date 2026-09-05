@@ -21,7 +21,7 @@ stimuli and reading back spike states at runtime.
 
 ## Features
 
-- **Export traits** for hardware alignment with [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl):
+- **Export traits** for hardware alignment with [silicon-hdl](https://github.com/rmems/silicon-hdl):
   - `FixedPointEncode` — `f32` → Q8.8 (`u16`)
   - `ParameterExport` — build the FPGA parameter bundle
   - `MemFileWriter` — write `$readmemh` `.mem` files
@@ -110,7 +110,7 @@ The signed decoder is wider than its encoder: the FPGA may send any `i16`, so
 
 Exported `.mem` files are directly loadable by silicon-hdl `WeightRam.sv` and
 `NeuronParamRam.sv`
-([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
+([rmems/silicon-hdl](https://github.com/rmems/silicon-hdl)).
 
 ## Vivado Timing Metrics
 
@@ -156,8 +156,8 @@ training orchestrator so it works with any SNN framework.
 
 | Library | Purpose |
 |---------|---------|
-| [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl) | SystemVerilog core, bridge, and SoC for Basys3 / Artix-7 |
-| [SynapticDistill.jl](https://github.com/Limen-Neural/SynapticDistill.jl) | Julia training + distillation (Q8.8 export path) |
+| [silicon-hdl](https://github.com/rmems/silicon-hdl) | SystemVerilog core, bridge, and SoC for Basys3 / Artix-7 |
+| [SynapticDistill.jl](https://github.com/rmems/SynapticDistill.jl) | Julia training + distillation (Q8.8 export path) |
 | [neuromod](https://github.com/Limen-Neural/neuromod) | SNN dynamics / core runtime traits |
 
 ## License

@@ -5,7 +5,7 @@
 //!
 //! This crate provides:
 //! - **Q8.8 fixed-point parameter export** (`FixedPointEncode`, `ParameterExport`,
-//!   `MemFileWriter`) for [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)
+//!   `MemFileWriter`) for [silicon-hdl](https://github.com/rmems/silicon-hdl)
 //!   `WeightRam` / `NeuronParamRam` via Vivado `$readmemh`
 //! - **FPGA spike readback** over UART using the SiliconBridge v3.0 protocol
 //! - **Vivado timing report parsing** for WNS-based CI/CD gating

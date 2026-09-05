@@ -1,6 +1,6 @@
 # silicon-bridge runtime / deployment boundary matrix
 
-Planning document for GitHub [#3](https://github.com/Limen-Neural/silicon-bridge/issues/3)
+Planning document for GitHub [#3](https://github.com/rmems/silicon-bridge/issues/3)
 and Linear [LIM-306](https://linear.app/rpd-34/issue/LIM-306) /
 [LIM-589](https://linear.app/rpd-34/issue/LIM-589).
 

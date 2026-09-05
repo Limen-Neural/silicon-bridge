@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-//! FPGA parameter export for [silicon-hdl](https://github.com/Limen-Neural/silicon-hdl).
+//! FPGA parameter export for [silicon-hdl](https://github.com/rmems/silicon-hdl).
 //!
 //! Converts trained SNN floats to unsigned **Q8.8** (`u16`) vectors and writes
 //! Vivado `$readmemh` `.mem` files consumable by `WeightRam` and `NeuronParamRam`
