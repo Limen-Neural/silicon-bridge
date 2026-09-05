@@ -13,6 +13,22 @@
 //! - [`FixedPointEncode`] — `f32` → Q8.8 `u16`
 //! - [`ParameterExport`] — produce [`FpgaParameters`]
 //! - [`MemFileWriter`] — write `.mem` + metadata JSON
+//!
+//! ## Q8.8 convention used here: unsigned
+//!
+//! This module encodes **unsigned** Q8.8 (`u16`). Host stimuli on the UART path
+//! use a **signed** `i16` convention ([`encode_q88_signed`]). The two are not
+//! interchangeable — see the crate-root “Q8.8 conventions” table.
+//!
+//! | Aspect | This module (`.mem` export) |
+//! |---|---|
+//! | Raw type | `u16` (unsigned — negatives are **not** representable) |
+//! | Width | 16 bits — 8 integer + 8 fractional |
+//! | Scaling | `raw = value × 256`, truncated toward zero |
+//! | Encoder input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) |
+//! | Encoder raw output | `0..=65535` |
+//! | Serialized as | ASCII hex, one `{:04X}` word per line for `$readmemh` |
+//! | Use it for | weights, thresholds, decay rates |
 
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -29,8 +45,16 @@ pub const EXPORT_FORMAT_VERSION: &str = "Spikenaut-v2";
 ///
 /// Q8.8 maps `value × 256` into a 16-bit word. Values outside the representable
 /// range are clamped.
+///
+/// This is the **unsigned** convention (`0.0..=255.99609375`, raw `0..=65535`)
+/// used for `.mem` parameter export. Host stimuli sent over UART use the signed
+/// `i16` convention ([`encode_q88_signed`]) — see the crate-root
+/// “Q8.8 conventions” table.
 pub trait FixedPointEncode {
-    /// Convert one `f32` to Q8.8 fixed-point.
+    /// Convert one `f32` to unsigned Q8.8 fixed-point.
+    ///
+    /// Negative inputs clamp to `0`; inputs above `255.99609375` clamp to
+    /// `65535`; `NaN` encodes as `0`.
     fn encode_q88(&self, value: f32) -> u16;
 }
 
@@ -199,10 +223,10 @@ impl FpgaParameterExporter {
 
 impl FixedPointEncode for FpgaParameterExporter {
     fn encode_q88(&self, value: f32) -> u16 {
-        // Q8.8: 8 integer bits, 8 fractional bits
-        // Range: 0.0 to 255.996 (clamped into u16)
-        let scaled = value * 256.0;
-        scaled.clamp(0.0, 65535.0) as u16
+        // ENCODE SITE (unsigned Q8.8) — `.mem` / synthesis path.
+        // Negatives are not representable and clamp to 0. Signed host stimuli
+        // use encode_q88_signed (i16) instead.
+        encode_q88_unsigned(value)
     }
 }
 
@@ -286,14 +310,90 @@ impl Default for FpgaParameterExporter {
     }
 }
 
-/// Helper function to format Q8.8 value as hex string
-pub fn format_q88_hex(value: f32) -> String {
-    let exporter = FpgaParameterExporter::new();
-    let q88_value = exporter.encode_q88(value);
-    format!("{:04X}", q88_value)
+/// Lower clamp bound for host stimuli on the signed Q8.8 UART path.
+///
+/// Values below this saturate to raw `-32765` (`i16`).
+pub const STIMULUS_Q88_MIN: f32 = -127.99;
+
+/// Upper clamp bound for host stimuli on the signed Q8.8 UART path.
+///
+/// Values above this saturate to raw `32765` (`i16`).
+pub const STIMULUS_Q88_MAX: f32 = 127.99;
+
+/// Encode an `f32` as **unsigned** Q8.8 (`u16`) without needing an exporter.
+///
+/// Single source of truth for the export-path encoding used by
+/// [`FixedPointEncode::encode_q88`], `.mem` files, and [`format_q88_hex`]:
+/// `raw = value × 256`, truncated toward zero, scaled result clamped to
+/// `0..=65535`. `NaN` encodes as `0`.
+///
+/// Host stimuli over UART must **not** use this function — they use
+/// [`encode_q88_signed`].
+///
+/// ```rust
+/// use silicon_bridge::{encode_q88_unsigned, q88_to_f32};
+///
+/// assert_eq!(encode_q88_unsigned(1.0), 256);
+/// assert_eq!(encode_q88_unsigned(-1.0), 0); // no negatives on the export path
+/// assert_eq!(encode_q88_unsigned(1000.0), 65535); // saturates
+/// assert_eq!(q88_to_f32(encode_q88_unsigned(0.5)), 0.5);
+/// ```
+pub fn encode_q88_unsigned(value: f32) -> u16 {
+    // ENCODE SITE (unsigned Q8.8) — clamp on the *scaled* value, so the
+    // representable input range is 0.0..=255.99609375 (65535 / 256).
+    // `f32::clamp` propagates NaN, so map it to 0 before the cast.
+    if value.is_nan() {
+        return 0;
+    }
+    let scaled = value * 256.0;
+    scaled.clamp(0.0, 65535.0) as u16
 }
 
-/// Helper function to convert Q8.8 back to f32
+/// Encode a host stimulus as **signed** Q8.8 (`i16`, two's complement).
+///
+/// `raw = value × 256`, truncated toward zero, with the *unscaled* input
+/// clamped to [`STIMULUS_Q88_MIN`]`..=`[`STIMULUS_Q88_MAX`]. `NaN` encodes as
+/// `0`. The UART wire format is big-endian (`to_be_bytes()`).
+///
+/// This is not interchangeable with [`encode_q88_unsigned`].
+///
+/// ```rust
+/// use silicon_bridge::{encode_q88_signed, q88_signed_to_f32};
+///
+/// assert_eq!(encode_q88_signed(1.0), 256);
+/// assert_eq!(encode_q88_signed(-1.0), -256); // negatives survive here
+/// assert_eq!(encode_q88_signed(-1.0).to_be_bytes(), [0xFF, 0x00]);
+/// assert_eq!(q88_signed_to_f32(encode_q88_signed(-0.5)), -0.5);
+/// ```
+pub fn encode_q88_signed(value: f32) -> i16 {
+    // ENCODE SITE (signed Q8.8) — UART / host-stimulus path.
+    // Clamp happens on the *unscaled* value so saturation lands on raw
+    // ±32765 (±127.99 × 256, truncated) rather than the i16 limits.
+    // `f32::clamp` propagates NaN, so map it to 0 before the i16 cast.
+    if value.is_nan() {
+        return 0;
+    }
+    (value.clamp(STIMULUS_Q88_MIN, STIMULUS_Q88_MAX) * 256.0) as i16
+}
+
+/// Decode a **signed** Q8.8 (`i16`) wire word back to `f32`.
+///
+/// Counterpart of [`encode_q88_signed`], but wider: every `i16` the FPGA can
+/// send is valid (`-32768..=32767` → `-128.0..=127.99609375`).
+pub fn q88_signed_to_f32(raw: i16) -> f32 {
+    raw as f32 / 256.0
+}
+
+/// Helper function to format unsigned Q8.8 value as hex string
+pub fn format_q88_hex(value: f32) -> String {
+    format!("{:04X}", encode_q88_unsigned(value))
+}
+
+/// Convert **unsigned** Q8.8 back to `f32`.
+///
+/// Counterpart of [`encode_q88_unsigned`]. For the signed UART path use
+/// [`q88_signed_to_f32`] — decoding a signed raw word with this function
+/// reads negatives as large positives.
 pub fn q88_to_f32(q88_value: u16) -> f32 {
     q88_value as f32 / 256.0
 }
@@ -503,5 +603,165 @@ mod tests {
         assert!((round_tripped.metadata.target_latency_us - 35.0).abs() < 1e-6);
         // (2 thresholds + 4 weights + 2 decay) * 2 bytes = 16 bytes
         assert!((round_tripped.metadata.memory_usage_kb - 16.0 / 1024.0).abs() < 1e-6);
+    }
+}
+
+#[cfg(test)]
+mod q88_convention_tests {
+    use super::*;
+
+    const MAX_UNSIGNED_INPUT: f32 = 65535.0 / 256.0; // 255.99609375
+
+    #[test]
+    fn unsigned_encode_scales_by_256() {
+        assert_eq!(encode_q88_unsigned(0.0), 0);
+        assert_eq!(encode_q88_unsigned(1.0), 256);
+        assert_eq!(encode_q88_unsigned(0.5), 128);
+        assert_eq!(encode_q88_unsigned(1.0 / 256.0), 1);
+        assert_eq!(encode_q88_unsigned(255.0), 65280);
+    }
+
+    #[test]
+    fn unsigned_encode_truncates_toward_zero() {
+        assert_eq!(encode_q88_unsigned(0.999), 255);
+        assert_eq!(encode_q88_unsigned(1.9999), 511);
+    }
+
+    #[test]
+    fn unsigned_encode_clamps_at_both_ends() {
+        assert_eq!(encode_q88_unsigned(MAX_UNSIGNED_INPUT), 65535);
+        assert_eq!(encode_q88_unsigned(256.0), 65535);
+        assert_eq!(encode_q88_unsigned(1.0e6), 65535);
+        assert_eq!(encode_q88_unsigned(f32::MAX), 65535);
+        assert_eq!(encode_q88_unsigned(f32::INFINITY), 65535);
+
+        assert_eq!(encode_q88_unsigned(0.0), 0);
+        assert_eq!(encode_q88_unsigned(-1.0 / 256.0), 0);
+        assert_eq!(encode_q88_unsigned(-1.0), 0);
+        assert_eq!(encode_q88_unsigned(-127.99), 0);
+        assert_eq!(encode_q88_unsigned(f32::MIN), 0);
+        assert_eq!(encode_q88_unsigned(f32::NEG_INFINITY), 0);
+    }
+
+    #[test]
+    fn unsigned_encode_maps_nan_to_zero() {
+        assert_eq!(encode_q88_unsigned(f32::NAN), 0);
+    }
+
+    #[test]
+    fn unsigned_encode_round_trips_through_q88_to_f32() {
+        for value in [0.0_f32, 0.00390625, 0.5, 1.0, 12.25, MAX_UNSIGNED_INPUT] {
+            let raw = encode_q88_unsigned(value);
+            assert_eq!(q88_to_f32(raw), value, "round trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn trait_and_inherent_encoders_match_the_free_function() {
+        let exporter = FpgaParameterExporter::new();
+        for value in [-5.0_f32, 0.0, 0.3, 1.0, 255.0, 300.0] {
+            let expected = encode_q88_unsigned(value);
+            assert_eq!(FixedPointEncode::encode_q88(&exporter, value), expected);
+            assert_eq!(exporter.to_q88(value), expected);
+        }
+    }
+
+    #[test]
+    fn mem_words_are_four_hex_digits_uppercase() {
+        assert_eq!(format_q88_hex(0.0), "0000");
+        assert_eq!(format_q88_hex(1.0), "0100");
+        assert_eq!(format_q88_hex(MAX_UNSIGNED_INPUT), "FFFF");
+        assert_eq!(format_q88_hex(-1.0), "0000");
+    }
+
+    #[test]
+    fn signed_encode_scales_by_256_in_both_directions() {
+        assert_eq!(encode_q88_signed(0.0), 0);
+        assert_eq!(encode_q88_signed(1.0), 256);
+        assert_eq!(encode_q88_signed(-1.0), -256);
+        assert_eq!(encode_q88_signed(0.5), 128);
+        assert_eq!(encode_q88_signed(-0.5), -128);
+        assert_eq!(encode_q88_signed(1.0 / 256.0), 1);
+        assert_eq!(encode_q88_signed(-1.0 / 256.0), -1);
+    }
+
+    #[test]
+    fn signed_encode_truncates_toward_zero() {
+        assert_eq!(encode_q88_signed(0.999), 255);
+        assert_eq!(encode_q88_signed(-0.999), -255);
+    }
+
+    #[test]
+    fn signed_encode_clamps_at_both_ends() {
+        assert_eq!(encode_q88_signed(STIMULUS_Q88_MAX), 32765);
+        assert_eq!(encode_q88_signed(STIMULUS_Q88_MIN), -32765);
+        assert_eq!(encode_q88_signed(128.0), 32765);
+        assert_eq!(encode_q88_signed(-128.0), -32765);
+        assert_eq!(encode_q88_signed(1.0e6), 32765);
+        assert_eq!(encode_q88_signed(-1.0e6), -32765);
+        assert_eq!(encode_q88_signed(f32::MAX), 32765);
+        assert_eq!(encode_q88_signed(f32::MIN), -32765);
+        assert_eq!(encode_q88_signed(f32::INFINITY), 32765);
+        assert_eq!(encode_q88_signed(f32::NEG_INFINITY), -32765);
+    }
+
+    #[test]
+    fn signed_encode_maps_nan_to_zero() {
+        assert_eq!(encode_q88_signed(f32::NAN), 0);
+    }
+
+    #[test]
+    fn signed_wire_words_are_big_endian() {
+        assert_eq!(encode_q88_signed(1.0).to_be_bytes(), [0x01, 0x00]);
+        assert_eq!(encode_q88_signed(-1.0).to_be_bytes(), [0xFF, 0x00]);
+        assert_eq!(encode_q88_signed(-0.5).to_be_bytes(), [0xFF, 0x80]);
+        assert_eq!(
+            encode_q88_signed(STIMULUS_Q88_MAX).to_be_bytes(),
+            [0x7F, 0xFD]
+        );
+    }
+
+    #[test]
+    fn signed_encode_round_trips_through_q88_signed_to_f32() {
+        for value in [-127.0_f32, -12.25, -1.0, -0.00390625, 0.0, 0.5, 64.75] {
+            let raw = encode_q88_signed(value);
+            assert_eq!(
+                q88_signed_to_f32(raw),
+                value,
+                "round trip failed for {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn signed_decoder_covers_the_full_i16_wire_range() {
+        assert_eq!(q88_signed_to_f32(i16::MIN), -128.0);
+        assert_eq!(q88_signed_to_f32(i16::MAX), 32767.0 / 256.0);
+        assert!(encode_q88_signed(-128.0) > i16::MIN);
+        assert!(encode_q88_signed(f32::MAX) < i16::MAX);
+    }
+
+    #[test]
+    fn signed_and_unsigned_agree_only_on_the_shared_range() {
+        for value in [0.0_f32, 0.5, 1.0, 64.25, 127.0] {
+            assert_eq!(
+                i32::from(encode_q88_signed(value)),
+                i32::from(encode_q88_unsigned(value)),
+                "conventions should agree for {value}"
+            );
+        }
+
+        assert_eq!(encode_q88_signed(200.0), 32765);
+        assert_eq!(encode_q88_unsigned(200.0), 51200);
+    }
+
+    #[test]
+    fn using_the_wrong_convention_corrupts_negative_values() {
+        assert_eq!(encode_q88_signed(-1.0), -256);
+        assert_eq!(encode_q88_unsigned(-1.0), 0);
+
+        let wire = encode_q88_signed(-1.0);
+        assert_eq!(q88_signed_to_f32(wire), -1.0);
+        assert_eq!(q88_to_f32(wire as u16), 255.0);
     }
 }
