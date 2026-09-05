@@ -15,8 +15,9 @@
 
 The Rust-side bridge between trained SNN parameters and FPGA hardware. Exports
 weights and thresholds as Q8.8 fixed-point `.mem` files for Vivado/Quartus
-`$readmemh`, and provides an async UART bridge for sending stimuli and reading
-back spike states at runtime.
+`$readmemh`, and provides an optional **synchronous** UART bridge — built on the
+blocking `serialport` crate and gated behind the `uart` feature — for sending
+stimuli and reading back spike states at runtime.
 
 ## Features
 
@@ -26,8 +27,11 @@ back spike states at runtime.
   - `MemFileWriter` — write `$readmemh` `.mem` files
 - `FpgaParameterExporter` — default implementation of those traits
 - `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
-- `FpgaBridge` — UART protocol for host–FPGA spike exchange (`uart` feature)
-- `FpgaMetrics` — Vivado timing report parser (**WNS** for CI/CD gating; LUT field reserved / not parsed yet)
+- `FpgaBridge` — blocking UART host protocol for host–FPGA spike exchange,
+  backed by `serialport` (`uart` feature); no async runtime is involved
+- `FpgaMetrics` — Vivado timing report parser: **WNS only** for CI/CD gating.
+  TNS is not parsed, and `lut_utilization` is a reserved field that the loaders
+  leave at `0.0` (both tracked by #21)
 
 ## Installation
 
@@ -52,7 +56,11 @@ let params = ParameterExport::export(&exporter);
 // → ready for silicon-hdl WeightRam / NeuronParamRam via Vivado $readmemh
 ```
 
-### UART Spike Readback
+### UART Spike Readback (requires the `uart` feature)
+
+```toml
+silicon-bridge = { version = "0.1", features = ["uart"] }
+```
 
 ```rust
 use silicon_bridge::FpgaBridge;
@@ -61,6 +69,10 @@ let mut bridge = FpgaBridge::new()?;
 let stimuli = vec![0.1; 16];
 let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 ```
+
+`FpgaBridge` is synchronous. `process_stimuli` writes the request frame and then
+blocks until the FPGA replies or the port's 100 ms read timeout elapses; nothing
+in this API returns a `Future`, and no async executor is required.
 
 ## Q8.8 Fixed-Point Format
 
@@ -73,6 +85,31 @@ Range: [0, 255.996]  (unsigned)
 
 Directly loadable by silicon-hdl `WeightRam.sv` and `NeuronParamRam.sv`
 ([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
+
+## Vivado Timing Metrics
+
+`FpgaMetrics` parses **WNS** (worst negative slack, in nanoseconds) out of a
+Vivado timing summary report so CI can gate on a timing violation. This matches
+`src/fpga_metrics.rs`: `parse_from_report` / `load_from_path` fill `wns_ns`
+only.
+
+```rust
+use silicon_bridge::FpgaMetrics;
+
+// Fail closed: a missing or unparseable report must not let the gate pass.
+let metrics = FpgaMetrics::load_from_path("Basys3_Top_timing_summary_routed.rpt")
+    .expect("timing report missing or unrecognized");
+assert!(metrics.wns_ns >= 0.0, "timing violation: WNS {} ns", metrics.wns_ns);
+```
+
+WNS is the only value actually parsed. Not implemented yet (tracked by #21):
+
+- **TNS** — there is no `tns_ns` field and no TNS parser
+- **LUT utilization** — `FpgaMetrics::lut_utilization` exists as a field, but
+  `load_from_project` and `load_from_path` hard-code it to `0.0`
+
+Until #21 lands, WNS is the only enforceable gate. See also
+[docs/boundary-matrix.md](docs/boundary-matrix.md).
 
 ## Repo boundaries
 
