@@ -464,9 +464,7 @@ mod tests {
 
         let expected = ParameterExport::export(&exporter);
         let thresholds = parse_mem_words(&read_mem_lines(dir.path().join("parameters.mem")));
-        let weights = parse_mem_words(&read_mem_lines(
-            dir.path().join("parameters_weights.mem"),
-        ));
+        let weights = parse_mem_words(&read_mem_lines(dir.path().join("parameters_weights.mem")));
         let decay_rates = parse_mem_words(&read_mem_lines(dir.path().join("parameters_decay.mem")));
 
         assert_eq!(thresholds, expected.thresholds);
