@@ -325,7 +325,7 @@ pub const STIMULUS_Q88_MAX: f32 = 127.99;
 /// Single source of truth for the export-path encoding used by
 /// [`FixedPointEncode::encode_q88`], `.mem` files, and [`format_q88_hex`]:
 /// `raw = value × 256`, truncated toward zero, scaled result clamped to
-/// `0..=65535`.
+/// `0..=65535`. `NaN` encodes as `0`.
 ///
 /// Host stimuli over UART must **not** use this function — they use
 /// [`encode_q88_signed`].
@@ -341,6 +341,10 @@ pub const STIMULUS_Q88_MAX: f32 = 127.99;
 pub fn encode_q88_unsigned(value: f32) -> u16 {
     // ENCODE SITE (unsigned Q8.8) — clamp on the *scaled* value, so the
     // representable input range is 0.0..=255.99609375 (65535 / 256).
+    // `f32::clamp` propagates NaN, so map it to 0 before the cast.
+    if value.is_nan() {
+        return 0;
+    }
     let scaled = value * 256.0;
     scaled.clamp(0.0, 65535.0) as u16
 }
@@ -365,6 +369,10 @@ pub fn encode_q88_signed(value: f32) -> i16 {
     // ENCODE SITE (signed Q8.8) — UART / host-stimulus path.
     // Clamp happens on the *unscaled* value so saturation lands on raw
     // ±32765 (±127.99 × 256, truncated) rather than the i16 limits.
+    // `f32::clamp` propagates NaN, so map it to 0 before the i16 cast.
+    if value.is_nan() {
+        return 0;
+    }
     (value.clamp(STIMULUS_Q88_MIN, STIMULUS_Q88_MAX) * 256.0) as i16
 }
 
