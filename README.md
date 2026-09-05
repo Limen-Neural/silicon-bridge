@@ -28,7 +28,10 @@ stimuli and reading back spike states at runtime.
 - `FpgaParameterExporter` — default implementation of those traits
 - `format_q88_hex` / `q88_to_f32` — Q8.8 helpers
 - `FpgaBridge` — blocking UART host protocol for host–FPGA spike exchange,
-  backed by `serialport` (`uart` feature); no async runtime is involved
+  backed by `serialport` (`uart` feature); no async runtime is involved.
+  `FpgaBridge::new()` probes only `/dev/ttyUSB0`, `/dev/ttyUSB1`, and
+  `/dev/ttyUSB2` on Linux — not ttyACM, Windows COM ports, or arbitrary
+  USB paths
 - `FpgaMetrics` — Vivado timing report parser: **WNS only** for CI/CD gating.
   TNS is not parsed, and `lut_utilization` is a reserved field that the loaders
   leave at `0.0` (both tracked by #21)
@@ -70,9 +73,15 @@ let stimuli = vec![0.1; 16];
 let (_potentials, spikes) = bridge.process_stimuli(&stimuli)?;
 ```
 
-`FpgaBridge` is synchronous. `process_stimuli` writes the request frame and then
-blocks until the FPGA replies or the port's 100 ms read timeout elapses; nothing
-in this API returns a `Future`, and no async executor is required.
+`FpgaBridge` is synchronous. `FpgaBridge::new()` opens the first of
+`/dev/ttyUSB0`, `/dev/ttyUSB1`, `/dev/ttyUSB2` that accepts 115200 baud; it
+does not probe ttyACM devices, Windows COM ports, or arbitrary USB paths.
+
+`process_stimuli` writes the request frame and then `read_exact`s the reply.
+The 100 ms value is the `serialport` **per-read** timeout, not a hard
+wall-clock budget for the entire call: a partial reply can retry, so the
+call can exceed 100 ms. Nothing in this API returns a `Future`, and no async
+executor is required.
 
 ## Q8.8 Fixed-Point Format
 
@@ -116,7 +125,11 @@ use silicon_bridge::FpgaMetrics;
 // Fail closed: a missing or unparseable report must not let the gate pass.
 let metrics = FpgaMetrics::load_from_path("Basys3_Top_timing_summary_routed.rpt")
     .expect("timing report missing or unrecognized");
-assert!(metrics.wns_ns >= 0.0, "timing violation: WNS {} ns", metrics.wns_ns);
+assert!(
+    metrics.wns_ns.is_finite() && metrics.wns_ns >= 0.0,
+    "timing violation or non-finite WNS: {} ns",
+    metrics.wns_ns
+);
 ```
 
 WNS is the only value actually parsed. Not implemented yet (tracked by #21):
