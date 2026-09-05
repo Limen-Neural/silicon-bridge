@@ -76,14 +76,31 @@ in this API returns a `Future`, and no async executor is required.
 
 ## Q8.8 Fixed-Point Format
 
-```
-Q8.8:  value = raw_u16 / 256.0
-       raw   = clamp(value × 256, 0, 65535) truncated to u16
-Range: [0, 255.996]  (unsigned)
-       [-128, 127.996]  (signed, two's complement)
-```
+Q8.8 always means “value × 256 packed into a 16-bit word”, but this crate
+carries **two signedness conventions** that are not interchangeable:
+parameters baked into the bitstream are unsigned; host stimuli sent over UART
+are signed.
 
-Directly loadable by silicon-hdl `WeightRam.sv` and `NeuronParamRam.sv`
+| Aspect | Parameter export (`.mem`) | Host stimuli (UART TX/RX) |
+|---|---|---|
+| Encode with | `FixedPointEncode::encode_q88` / `encode_q88_unsigned` | `encode_q88_signed` |
+| Decode with | `q88_to_f32` | `q88_signed_to_f32` |
+| Raw type | `u16` (unsigned) | `i16` (two's complement) |
+| Width | 16 bits — 8 integer + 8 fractional | 16 bits — 8 integer + 8 fractional |
+| Scaling | `raw = value × 256`, truncated toward zero | `raw = value × 256`, truncated toward zero |
+| Encoder input clamp | `[0.0, 255.99609375]` (scaled clamp `0..=65535`) | `[-127.99, 127.99]` |
+| Encoder raw output | `0..=65535` | `-32765..=32765` (saturates inside the `i16` limits) |
+| Decoder accepts | any `u16`: `0..=65535` → `0.0..=255.99609375` | any `i16`: `-32768..=32767` → `-128.0..=127.99609375` |
+| Serialized as | ASCII hex, one `{:04X}` word per line (`$readmemh`) | raw binary, big-endian (MSB first) |
+| Use it for | weights, thresholds, decay rates | host stimuli, RX membrane potentials |
+
+The export path **cannot represent negative values** — anything below `0.0`
+clamps to raw `0`. Both encoders truncate toward zero and map `NaN` to raw `0`.
+The signed decoder is wider than its encoder: the FPGA may send any `i16`, so
+`0x8000` decodes to `-128.0` even though TX saturates at `±32765`.
+
+Exported `.mem` files are directly loadable by silicon-hdl `WeightRam.sv` and
+`NeuronParamRam.sv`
 ([Limen-Neural/silicon-hdl](https://github.com/Limen-Neural/silicon-hdl)).
 
 ## Vivado Timing Metrics
